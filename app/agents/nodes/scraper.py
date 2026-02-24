@@ -32,6 +32,7 @@ def scrape_tavily_node(state: PipelineState) -> dict:
         from langchain_tavily import TavilySearch
 
         tool = TavilySearch(
+            tavily_api_key=settings.tavily_api_key,
             max_results=10,
             topic="news",
             search_depth="advanced",
@@ -141,11 +142,11 @@ def scrape_arxiv_node(state: PipelineState) -> dict:
 
         search = arxiv.Search(
             query="cat:cs.AI OR cat:cs.LG OR cat:cs.CL OR cat:cs.CV",
-            max_results=20,
+            max_results=10,
             sort_by=arxiv.SortCriterion.SubmittedDate,
         )
 
-        client = arxiv.Client(delay_seconds=3)  # respect rate limits
+        client = arxiv.Client(delay_seconds=5, num_retries=1)  # respect rate limits
         articles: list[NewsArticle] = []
 
         for result in client.results(search):
@@ -173,7 +174,7 @@ def scrape_arxiv_node(state: PipelineState) -> dict:
 # ═══════════════════════════════════════════════════════════════
 def scrape_serper_node(state: PipelineState) -> dict:
     """Search Google News via Serper as a fallback/gap-filler."""
-    if not settings.serper_api_key:
+    if not settings.serper_api_key or settings.serper_api_key.startswith("your-"):
         logger.info("serper_skipped", reason="no API key configured")
         return {"raw_articles": []}
 

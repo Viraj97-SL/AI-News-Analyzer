@@ -9,6 +9,8 @@ Uses tiered model routing:
 
 from __future__ import annotations
 
+import json
+import re
 from typing import TYPE_CHECKING
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -163,11 +165,26 @@ def summarize_node(state: PipelineState) -> dict:
             response_length=len(response.content),
         )
 
-        # TODO: Parse JSON response into list[Summary] and populate state
-        return {
-            "summaries": [],  # placeholder — parse response.content here
-            "current_step": "summarized",
-        }
+        # Parse JSON response into list[Summary]
+        raw_text = response.content.strip()
+        # Strip markdown fences if the model wraps in ```json ... ```
+        raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
+        raw_text = re.sub(r"\s*```$", "", raw_text).strip()
+
+        parsed: list[dict] = json.loads(raw_text)
+        summaries = [
+            {
+                "headline": item.get("headline", ""),
+                "body": item.get("body", ""),
+                "category": item.get("category", "Industry"),
+                "source_urls": [item.get("source_url", "")],
+                "credibility_score": float(item.get("credibility_score", 0.5)),
+            }
+            for item in parsed
+            if isinstance(item, dict)
+        ]
+        logger.info("summaries_parsed", count=len(summaries))
+        return {"summaries": summaries, "current_step": "summarized"}
 
     except Exception as e:
         logger.error("summarize_error", error=str(e))

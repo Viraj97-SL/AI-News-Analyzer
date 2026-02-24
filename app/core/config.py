@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     google_api_key: str = ""
 
     # Model routing
-    model_classifier: str = "gemini-2.0-flash-lite"
+    model_classifier: str = "gemini-2.5-flash"
     model_summarizer: str = "gemini-2.5-flash"
     model_analyzer: str = "gemini-2.5-pro"
 
