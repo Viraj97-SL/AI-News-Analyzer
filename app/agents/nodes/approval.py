@@ -27,12 +27,36 @@ def human_approval_node(state: PipelineState) -> Command[Literal["publish", "rev
     A FastAPI endpoint (see api/v1/routes/approvals.py) resumes it with:
       graph.invoke(Command(resume={"action": "approve"}), config)
     """
+    run_id = state.get("run_id", "unknown")
     logger.info(
         "awaiting_approval",
-        run_id=state.get("run_id"),
+        run_id=run_id,
         linkedin_chars=len(state.get("linkedin_draft", "")),
         image_count=len(state.get("image_paths", [])),
     )
+
+    # Send approval email with signed approve/reject links before suspending
+    try:
+        from app.core.config import get_settings
+        from app.core.security import create_approval_token
+        from app.services.email_service import EmailService
+
+        _settings = get_settings()
+        approve_token = create_approval_token(run_id, "approve", _settings)
+        reject_token = create_approval_token(run_id, "reject", _settings)
+        base = _settings.app_base_url.rstrip("/")
+        approve_url = f"{base}/api/v1/approvals/via-token?token={approve_token}"
+        reject_url = f"{base}/api/v1/approvals/via-token?token={reject_token}"
+
+        EmailService().send_approval_email(
+            run_id=run_id,
+            linkedin_preview=state.get("linkedin_draft", ""),
+            approve_url=approve_url,
+            reject_url=reject_url,
+        )
+        logger.info("approval_email_sent", run_id=run_id)
+    except Exception as e:
+        logger.error("approval_email_failed", error=str(e))
 
     # This suspends the graph and returns the payload to the caller
     decision = interrupt(

@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # ── Application ─────────────────────────────────────────
     app_env: Literal["development", "staging", "production"] = "development"
     app_secret_key: str = "CHANGE-ME"  # noqa: S105
+    app_base_url: str = "http://localhost:8000"  # used to build approve/reject links
     log_level: str = "INFO"
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8501"]
 
