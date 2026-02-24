@@ -33,7 +33,7 @@ async def main() -> int:
 
             checkpointer = InMemorySaver()
         else:
-            from langgraph.checkpoint.postgres import AsyncPostgresSaver
+            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
             checkpointer = AsyncPostgresSaver.from_conn_string(settings.langgraph_pg_uri)
             await checkpointer.setup()
