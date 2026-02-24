@@ -56,3 +56,7 @@ class PipelineState(TypedDict):
     total_tokens: int
     total_cost: float
     current_step: str
+
+    # ── Research Analyst Variables ──────────────────────────
+    chosen_research_paper: NotRequired[dict]
+    deep_analysis: NotRequired[dict]

@@ -140,9 +140,3 @@ PYTHONPATH=/app python cron/trigger.py
 * Built using [LangGraph](https://python.langchain.com/docs/langgraph/) for stateful, multi-actor LLM applications.
 * UI inspiration for image generation features Dark Mode / Glassmorphism aesthetics.
 
-```
-
-### How to use this:
-Just copy the text above, open your `README.md` file in GitHub or your IDE, delete everything currently in it, and paste this in. It is beautifully formatted, utilizes badges, and explains your advanced architecture perfectly!
-
-```

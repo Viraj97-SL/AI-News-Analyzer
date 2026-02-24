@@ -91,7 +91,7 @@ class EmailService:
             <h3>LinkedIn Post Preview:</h3>
             <div style="background: #f5f5f5; padding: 16px; border-radius: 8px;
                         white-space: pre-wrap;">
-                {linkedin_preview[:1500]}
+                {linkedin_preview}
             </div>
 
             <div style="margin-top: 24px; text-align: center;">
