@@ -6,20 +6,25 @@ Layer 1: Source reputation lookup (domain → score database)
 
 Layer 2: Cross-reference verification (multi-source confirmation)
 
+
 Layer 3: LLM-based factual consistency (RAG-augmented fact checking)
 
-Final score = 0.4 × source_reputation + 0.3 × cross_reference + 0.3 × factual_consistency
+Final score = 0.4 * source_reputation + 0.3 * cross_reference + 0.3 * factual_consistency
 """
 
 from __future__ import annotations
 
-from app.agents.state import NewsArticle, PipelineState
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.agents.state import NewsArticle, PipelineState
+
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
 # ── Layer 1: Source reputation database ─────────────────────
-# Scores 0.0–1.0, sourced from NewsGuard / MBFC / domain authority
+# Scores 0.0-1.0, sourced from NewsGuard / MBFC / domain authority
 # Expand this as you onboard more sources.
 SOURCE_REPUTATION: dict[str, float] = {
     # Tier 1 — established tech journalism

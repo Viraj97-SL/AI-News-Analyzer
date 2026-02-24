@@ -7,7 +7,6 @@ on PipelineState.raw_articles merges automatically.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -15,7 +14,6 @@ import httpx
 from app.agents.state import NewsArticle, PipelineState
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.core.security import hash_content
 
 logger = get_logger(__name__)
 settings = get_settings()

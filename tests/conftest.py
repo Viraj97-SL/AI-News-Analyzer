@@ -17,7 +17,8 @@ def mock_llm() -> FakeListChatModel:
     """Deterministic mock LLM that returns canned responses."""
     return FakeListChatModel(
         responses=[
-            '[{"headline": "Test AI News", "body": "A test summary.", "category": "LLM", "source_url": "https://example.com", "credibility_score": 0.8}]',
+            '[{"headline": "Test AI News", "body": "A test summary.", "category": "LLM",'
+            ' "source_url": "https://example.com", "credibility_score": 0.8}]',
         ]
     )
 

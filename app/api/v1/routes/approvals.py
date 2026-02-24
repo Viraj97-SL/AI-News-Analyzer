@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.api.v1.deps import AppSettings, AuthenticatedUser
+from app.api.v1.deps import AppSettings, AuthenticatedUser  # noqa: TC001
 from app.core.logging import get_logger
 from app.core.security import verify_approval_token
 from app.schemas.schemas import ApprovalRequest, ApprovalResponse
@@ -38,7 +38,7 @@ async def approve_or_reject(
         config = {"configurable": {"thread_id": run_id}}
 
         # Resume the interrupted graph
-        result = await graph.ainvoke(
+        await graph.ainvoke(
             Command(resume={"action": body.action, "feedback": body.feedback}),
             config,
         )

@@ -1,18 +1,20 @@
 """
 Image generation node — branded news card images via html2image.
 
-Produces 1200×627px cards (LinkedIn optimal) using HTML/CSS templates
+Produces 1200x627px cards (LinkedIn optimal) using HTML/CSS templates
 rendered through headless Chrome. Zero API cost, full design control.
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from app.agents.state import PipelineState
+if TYPE_CHECKING:
+    from app.agents.state import PipelineState
+
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
@@ -41,7 +43,10 @@ def image_gen_node(state: PipelineState) -> dict:
         )
 
         # Load Jinja2 template
-        env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
+        env = Environment(
+            loader=FileSystemLoader(str(TEMPLATE_DIR)),
+            autoescape=select_autoescape(["html"]),
+        )
         template = env.get_template("news_card.html")
 
         image_paths: list[str] = []

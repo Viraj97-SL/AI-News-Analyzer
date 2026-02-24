@@ -6,7 +6,7 @@ Uses SQLAlchemy 2.0 async engine with asyncpg (Postgres) or aiosqlite (dev).
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator  # noqa: TC003
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 

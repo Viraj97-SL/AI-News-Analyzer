@@ -7,7 +7,6 @@ Aligned with OWASP LLM Top 10 (2025) — see Section 9 of the design doc.
 from __future__ import annotations
 
 import hashlib
-import hmac
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Annotated

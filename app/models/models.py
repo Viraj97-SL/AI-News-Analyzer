@@ -48,15 +48,21 @@ class AgentRun(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     status: Mapped[RunStatus] = mapped_column(Enum(RunStatus), default=RunStatus.PENDING)
     trigger_type: Mapped[str] = mapped_column(String(20))  # "scheduled" | "manual"
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     total_tokens: Mapped[int] = mapped_column(Integer, default=0)
     total_cost: Mapped[float] = mapped_column(Float, default=0.0)
     error_log: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
-    articles: Mapped[list[NewsArticleModel]] = relationship(back_populates="run", cascade="all, delete-orphan")
-    summaries: Mapped[list[SummaryModel]] = relationship(back_populates="run", cascade="all, delete-orphan")
+    articles: Mapped[list[NewsArticleModel]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
+    summaries: Mapped[list[SummaryModel]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
 
 
 class NewsArticleModel(Base):
@@ -109,5 +115,7 @@ class EmailDeliveryModel(Base):
     resend_email_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     recipients: Mapped[str] = mapped_column(Text)  # JSON array of emails
     subject: Mapped[str] = mapped_column(String(500))
-    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
     status: Mapped[str] = mapped_column(String(20), default="sent")

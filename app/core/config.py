@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     # ── Application ─────────────────────────────────────────
     app_env: Literal["development", "staging", "production"] = "development"
-    app_secret_key: str = "CHANGE-ME"
+    app_secret_key: str = "CHANGE-ME"  # noqa: S105
     log_level: str = "INFO"
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8501"]
 
@@ -100,7 +100,7 @@ class Settings(BaseSettings):
 
     # ── Security ────────────────────────────────────────────
     api_key: str = "change-me"
-    jwt_secret: str = "change-me"
+    jwt_secret: str = "change-me"  # noqa: S105
     jwt_algorithm: str = "HS256"
     approval_token_expiry_hours: int = 48
 
@@ -111,7 +111,9 @@ class Settings(BaseSettings):
     scraper_backoff_base: float = 2.0
 
     # ── Cost guardrails ─────────────────────────────────────
-    max_cost_per_run: float = Field(default=5.0, description="Hard stop if estimated cost exceeds this ($)")
+    max_cost_per_run: float = Field(
+        default=5.0, description="Hard stop if estimated cost exceeds this ($)"
+    )
     max_tokens_per_run: int = Field(default=2_000_000, description="Hard stop on total tokens")
 
 

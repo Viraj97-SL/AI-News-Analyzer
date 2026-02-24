@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-
 from app.agents.nodes.credibility import _get_source_reputation, credibility_node
 from app.agents.nodes.summarizer import deduplicate_node
-from app.agents.state import NewsArticle, PipelineState
 from app.core.security import hash_content, sanitize_for_display
 
 
@@ -34,7 +31,7 @@ class TestDeduplication:
     def test_removes_exact_duplicates(self, sample_articles):
         # Add a duplicate
         duplicate = {**sample_articles[0]}
-        articles = sample_articles + [duplicate]
+        articles = [*sample_articles, duplicate]
         state = {"raw_articles": articles, "deduplicated_articles": []}
 
         result = deduplicate_node(state)

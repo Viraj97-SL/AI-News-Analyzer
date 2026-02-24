@@ -7,11 +7,13 @@ The approval email contains signed approve/reject URLs that resume the graph.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from langgraph.types import Command, interrupt
 
-from app.agents.state import PipelineState
+if TYPE_CHECKING:
+    from app.agents.state import PipelineState
+
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)

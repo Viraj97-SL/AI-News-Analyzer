@@ -9,10 +9,14 @@ Uses tiered model routing:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from app.agents.state import NewsArticle, PipelineState, Summary
+if TYPE_CHECKING:
+    from app.agents.state import NewsArticle, PipelineState
+
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.core.security import hash_content
@@ -93,7 +97,7 @@ def analyze_node(state: PipelineState) -> dict:
             HumanMessage(content=article_list),
         ]
 
-        response = llm.invoke(messages)
+        llm.invoke(messages)
         logger.info("analysis_complete", articles_analysed=min(len(articles), 50))
 
         # TODO: Parse JSON response, enrich articles with categories & scores

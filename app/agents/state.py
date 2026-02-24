@@ -17,12 +17,12 @@ class NewsArticle(TypedDict):
     source: str           # e.g. "tavily", "rss:techcrunch", "arxiv", "serper"
     content: str           # full text or abstract
     published_at: str      # ISO-8601
-    credibility_score: float  # 0.0–1.0, populated by credibility node
+    credibility_score: float  # 0.0-1.0, populated by credibility node
 
 
 class Summary(TypedDict):
     headline: str
-    body: str              # 2–3 paragraph summary
+    body: str              # 2-3 paragraph summary
     category: str          # e.g. "LLM", "Computer Vision", "Robotics", "Policy"
     source_urls: list[str]
     credibility_score: float

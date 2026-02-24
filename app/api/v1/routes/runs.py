@@ -8,16 +8,19 @@ GET  /api/v1/runs/{run_id} — poll run status
 from __future__ import annotations
 
 import uuid
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.agents.graph import build_graph
-from app.agents.state import PipelineState
-from app.api.v1.deps import AppSettings, AuthenticatedUser
+from app.api.v1.deps import AuthenticatedUser  # noqa: TC001
+
+if TYPE_CHECKING:
+    from app.agents.state import PipelineState
 from app.core.logging import get_logger
-from app.schemas.schemas import RunStatusResponse, TriggerRequest, TriggerResponse
+from app.schemas.schemas import TriggerResponse
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 logger = get_logger(__name__)

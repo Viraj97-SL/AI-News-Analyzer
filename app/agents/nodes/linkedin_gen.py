@@ -7,10 +7,14 @@ respecting the 3,000-char limit and 210-char "see more" hook.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from app.agents.state import PipelineState
+if TYPE_CHECKING:
+    from app.agents.state import PipelineState
+
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
@@ -22,13 +26,13 @@ LINKEDIN_SYSTEM_PROMPT = """You are a LinkedIn content strategist for an AI/ML t
 Write a LinkedIn post summarising this week's top AI/ML news. Follow these rules strictly:
 
 FORMAT:
-- Total length: 1,200–1,800 characters (hard max: 3,000)
+- Total length: 1,200-1,800 characters (hard max: 3,000)
 - First 210 characters = the HOOK (this is all people see before "see more")
   → Make it provocative, specific, and curiosity-inducing. No generic openings.
 - Use liberal whitespace between sections for mobile readability
-- Use → bullets for 3–5 key takeaways
+- Use -> bullets for 3-5 key takeaways
 - End with an engaging question to drive comments
-- Add 3–5 relevant hashtags at the bottom
+- Add 3-5 relevant hashtags at the bottom
 
 TONE:
 - Authoritative but accessible — you're explaining to smart professionals, not academics
