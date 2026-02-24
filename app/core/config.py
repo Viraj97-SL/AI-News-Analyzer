@@ -71,14 +71,22 @@ class Settings(BaseSettings):
     tavily_api_key: str = ""
     serper_api_key: str = ""
 
-    # ── Email ───────────────────────────────────────────────
-    resend_api_key: str = ""
-    email_from: str = "news@yourdomain.com"
+    # ── Email (SMTP) ─────────────────────────────────────────
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str = ""   # Gmail address, e.g. you@gmail.com
+    smtp_password: str = ""  # App password (not your login password)
+    email_from: str = ""  # Defaults to smtp_user if empty
     email_to: str = "you@example.com"
 
     @property
     def email_recipients(self) -> list[str]:
         return [e.strip() for e in self.email_to.split(",")]
+
+    @property
+    def email_sender(self) -> str:
+        """Use email_from if set, otherwise fall back to smtp_user."""
+        return self.email_from or self.smtp_user
 
     # ── LinkedIn ────────────────────────────────────────────
     linkedin_client_id: str = ""

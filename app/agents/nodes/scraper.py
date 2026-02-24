@@ -22,49 +22,72 @@ settings = get_settings()
 # ═══════════════════════════════════════════════════════════════
 # Tier 1: Tavily Search
 # ═══════════════════════════════════════════════════════════════
+_TAVILY_API_URL = "https://api.tavily.com/search"
+_TAVILY_QUERIES = [
+    "artificial intelligence machine learning news",
+    "large language model LLM new release 2025",
+    "AI startup funding product launch 2025",
+    "generative AI tools research breakthrough",
+]
+
+
 def scrape_tavily_node(state: PipelineState) -> dict:
-    """Search AI/ML news via Tavily's LLM-optimised search API."""
+    """Search AI/ML news via Tavily REST API (direct httpx call)."""
     if not settings.tavily_api_key:
         logger.warning("tavily_skipped", reason="no API key configured")
         return {"raw_articles": [], "error_log": ["Tavily: no API key"]}
 
+    cutoff = datetime.now(UTC) - timedelta(days=7)
+    articles: list[NewsArticle] = []
+    seen_urls: set[str] = set()
+
     try:
-        from langchain_tavily import TavilySearch
+        with httpx.Client(timeout=20) as client:
+            for query in _TAVILY_QUERIES:
+                try:
+                    resp = client.post(
+                        _TAVILY_API_URL,
+                        json={
+                            "api_key": settings.tavily_api_key,
+                            "query": query,
+                            "search_depth": "advanced",
+                            "topic": "news",
+                            "days": 7,
+                            "max_results": 8,
+                            "include_answer": False,
+                        },
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                except Exception as e:
+                    logger.warning("tavily_query_failed", query=query, error=str(e))
+                    continue
 
-        tool = TavilySearch(
-            tavily_api_key=settings.tavily_api_key,
-            max_results=10,
-            topic="news",
-            search_depth="advanced",
-            time_range="week",
-            include_domains=[
-                "techcrunch.com",
-                "venturebeat.com",
-                "theverge.com",
-                "wired.com",
-                "arstechnica.com",
-                "thenewstack.io",
-            ],
-        )
+                for r in data.get("results", []):
+                    url = r.get("url", "")
+                    if not url or url in seen_urls:
+                        continue
 
-        queries = [
-            "artificial intelligence machine learning news this week",
-            "large language model LLM breakthroughs 2025",
-            "AI startup funding and product launches",
-        ]
+                    # Date filter — keep only articles from the past 7 days
+                    pub_raw = r.get("published_date", "")
+                    if pub_raw:
+                        try:
+                            pub_dt = datetime.fromisoformat(pub_raw.replace("Z", "+00:00"))
+                            if pub_dt.tzinfo is None:
+                                pub_dt = pub_dt.replace(tzinfo=UTC)
+                            if pub_dt < cutoff:
+                                continue
+                        except ValueError:
+                            pass  # keep article if date can't be parsed
 
-        articles: list[NewsArticle] = []
-        for query in queries:
-            results = tool.invoke(query)
-            if isinstance(results, list):
-                for r in results:
+                    seen_urls.add(url)
                     articles.append(
                         NewsArticle(
                             title=r.get("title", "Untitled"),
-                            url=r.get("url", ""),
+                            url=url,
                             source="tavily",
-                            content=r.get("content", ""),
-                            published_at=r.get("published_date", datetime.now(UTC).isoformat()),
+                            content=r.get("content", r.get("snippet", "")),
+                            published_at=pub_raw or datetime.now(UTC).isoformat(),
                             credibility_score=0.0,
                         )
                     )
@@ -148,8 +171,16 @@ def scrape_arxiv_node(state: PipelineState) -> dict:
 
         client = arxiv.Client(delay_seconds=5, num_retries=1)  # respect rate limits
         articles: list[NewsArticle] = []
+        cutoff = datetime.now(UTC) - timedelta(days=7)
 
         for result in client.results(search):
+            # Only include papers submitted in the last 7 days
+            pub_dt = result.published
+            if pub_dt.tzinfo is None:
+                pub_dt = pub_dt.replace(tzinfo=UTC)
+            if pub_dt < cutoff:
+                continue
+
             articles.append(
                 NewsArticle(
                     title=result.title,

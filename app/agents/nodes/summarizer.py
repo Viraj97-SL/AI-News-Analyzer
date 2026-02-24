@@ -2,7 +2,7 @@
 Summarizer nodes — deduplication, analysis, and LLM summarization.
 
 Uses tiered model routing:
-  - Flash-Lite for topic classification
+  - Flash for topic classification
   - Flash for summarization
   - Pro reserved for complex analysis (called from credibility node)
 """
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -65,10 +66,17 @@ def deduplicate_node(state: PipelineState) -> dict:
 # ═══════════════════════════════════════════════════════════════
 # Analysis — categorise and rank articles by relevance
 # ═══════════════════════════════════════════════════════════════
+_VALID_CATEGORIES = frozenset(
+    ["LLM", "Computer Vision", "Robotics", "AI Policy", "AI Startup", "Research Paper",
+     "Industry News", "Other"]
+)
+
+
 def analyze_node(state: PipelineState) -> dict:
     """
     Categorise articles into topics and rank by significance.
-    Uses Gemini Flash-Lite (cheapest tier) for classification.
+    Uses Gemini Flash (mid tier) for classification. Enriches each article
+    in-place with 'category' and 'relevance_score' fields.
     """
     articles = state.get("deduplicated_articles", [])
     if not articles:
@@ -81,9 +89,9 @@ def analyze_node(state: PipelineState) -> dict:
             google_api_key=settings.google_api_key,
         )
 
-        # Batch classification prompt
+        batch = articles[:50]
         article_list = "\n".join(
-            f"[{i}] {a['title']} — {a['content'][:200]}" for i, a in enumerate(articles[:50])
+            f"[{i}] {a['title']} — {a['content'][:200]}" for i, a in enumerate(batch)
         )
 
         messages = [
@@ -99,16 +107,62 @@ def analyze_node(state: PipelineState) -> dict:
             HumanMessage(content=article_list),
         ]
 
-        llm.invoke(messages)
-        logger.info("analysis_complete", articles_analysed=min(len(articles), 50))
+        response = llm.invoke(messages)
+        raw_text = response.content.strip()
+        raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
+        raw_text = re.sub(r"\s*```$", "", raw_text).strip()
 
-        # TODO: Parse JSON response, enrich articles with categories & scores
-        # For now, pass through as-is
-        return {"current_step": "analyzed"}
+        parsed: list[dict] = json.loads(raw_text)
+        enriched = list(articles)  # shallow copy so we don't mutate state directly
+        for item in parsed:
+            idx = item.get("index")
+            if not isinstance(idx, int) or idx >= len(enriched):
+                continue
+            cat = item.get("category", "Other")
+            enriched[idx] = {
+                **enriched[idx],
+                "category": cat if cat in _VALID_CATEGORIES else "Other",
+                "relevance_score": float(item.get("relevance_score", 0.5)),
+            }
+
+        logger.info(
+            "analysis_complete",
+            articles_analysed=len(batch),
+            enriched=len(parsed),
+        )
+        return {"deduplicated_articles": enriched, "current_step": "analyzed"}
 
     except Exception as e:
         logger.error("analyze_error", error=str(e))
         return {"error_log": [f"Analysis error: {e}"], "current_step": "analyzed"}
+
+
+# ═══════════════════════════════════════════════════════════════
+# Ranking — composite score for article prioritisation
+# ═══════════════════════════════════════════════════════════════
+def _rank_score(article: dict) -> float:
+    """
+    Composite ranking: 35% credibility + 40% relevance + 25% recency.
+
+    Recency decays linearly from 1.0 (today) to 0.0 (7+ days old).
+    Falls back gracefully when optional fields are absent.
+    """
+    credibility = float(article.get("credibility_score", 0.5))
+    relevance = float(article.get("relevance_score", 0.5))
+
+    recency = 0.5  # neutral default
+    pub_raw = article.get("published_at", "")
+    if pub_raw:
+        try:
+            pub_dt = datetime.fromisoformat(pub_raw.replace("Z", "+00:00"))
+            if pub_dt.tzinfo is None:
+                pub_dt = pub_dt.replace(tzinfo=UTC)
+            age_days = (datetime.now(UTC) - pub_dt).total_seconds() / 86400
+            recency = max(0.0, 1.0 - age_days / 7.0)
+        except ValueError:
+            pass
+
+    return 0.35 * credibility + 0.40 * relevance + 0.25 * recency
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -138,8 +192,8 @@ def summarize_node(state: PipelineState) -> dict:
             google_api_key=settings.google_api_key,
         )
 
-        # Build article context (top articles by credibility)
-        sorted_articles = sorted(articles, key=lambda a: a["credibility_score"], reverse=True)
+        # Sort by composite score: credibility + relevance + recency
+        sorted_articles = sorted(articles, key=_rank_score, reverse=True)
         top_articles = sorted_articles[: settings.max_articles_per_run]
 
         article_context = "\n---\n".join(

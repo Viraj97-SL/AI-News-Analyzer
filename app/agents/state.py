@@ -8,7 +8,7 @@ Annotated reducers allow parallel scrapers to append concurrently without races.
 from __future__ import annotations
 
 import operator
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Literal, NotRequired, TypedDict
 
 
 class NewsArticle(TypedDict):
@@ -18,6 +18,8 @@ class NewsArticle(TypedDict):
     content: str  # full text or abstract
     published_at: str  # ISO-8601
     credibility_score: float  # 0.0-1.0, populated by credibility node
+    category: NotRequired[str]  # populated by analyze_node
+    relevance_score: NotRequired[float]  # 0.0-1.0, populated by analyze_node
 
 
 class Summary(TypedDict):

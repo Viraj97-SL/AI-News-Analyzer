@@ -1,15 +1,23 @@
 """
-Email delivery service via Resend API.
+Email delivery service via SMTP (Gmail-compatible).
 
-Sends the newsletter HTML with inline news card images.
-Free tier: 100 emails/day, 3,000/month — more than enough for 2x/week.
+Uses Python's built-in smtplib with STARTTLS so it works with any
+SMTP provider: Gmail App Passwords, SendGrid, Mailgun, etc.
+
+Gmail setup:
+  1. Enable 2-Step Verification on your Google account.
+  2. Generate an App Password (Google Account → Security → App Passwords).
+  3. Set SMTP_USER=you@gmail.com and SMTP_PASSWORD=<app-password> in .env.
 """
 
 from __future__ import annotations
 
+import smtplib
+from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
-
-import resend
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -19,43 +27,48 @@ settings = get_settings()
 
 
 class EmailService:
-    def __init__(self) -> None:
-        resend.api_key = settings.resend_api_key
+    def _send(self, msg: MIMEMultipart, recipients: list[str]) -> None:
+        """Open SMTP connection, send, close. Raises on failure."""
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.ehlo()
+            if settings.smtp_user and settings.smtp_password:
+                smtp.login(settings.smtp_user, settings.smtp_password)
+            smtp.sendmail(settings.email_sender, recipients, msg.as_string())
 
     def send_newsletter(
         self,
         html_content: str,
-        subject: str = "🤖 Your AI/ML Weekly Digest",
+        subject: str = "Your AI/ML Weekly Digest",
         image_paths: list[str] | None = None,
-    ) -> dict:
+    ) -> None:
         """Send the newsletter to all configured recipients."""
+        recipients = settings.email_recipients
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = subject
+        msg["From"] = settings.email_sender
+        msg["To"] = ", ".join(recipients)
+
+        msg.attach(MIMEText(html_content, "html", "utf-8"))
+
+        if image_paths:
+            for path_str in image_paths:
+                path = Path(path_str)
+                if path.exists():
+                    with open(path, "rb") as f:
+                        part = MIMEBase("application", "octet-stream")
+                        part.set_payload(f.read())
+                    encoders.encode_base64(part)
+                    part.add_header(
+                        "Content-Disposition",
+                        f'attachment; filename="{path.name}"',
+                    )
+                    msg.attach(part)
+
         try:
-            params: resend.Emails.SendParams = {
-                "from": settings.email_from,
-                "to": settings.email_recipients,
-                "subject": subject,
-                "html": html_content,
-            }
-
-            # Attach images if provided
-            if image_paths:
-                attachments = []
-                for path_str in image_paths:
-                    path = Path(path_str)
-                    if path.exists():
-                        with open(path, "rb") as f:
-                            attachments.append({"filename": path.name, "content": list(f.read())})
-                if attachments:
-                    params["attachments"] = attachments
-
-            result = resend.Emails.send(params)
-            logger.info(
-                "newsletter_sent",
-                email_id=result.get("id"),
-                recipients=len(settings.email_recipients),
-            )
-            return result
-
+            self._send(msg, recipients)
+            logger.info("newsletter_sent", recipients=len(recipients))
         except Exception as e:
             logger.error("email_send_error", error=str(e))
             raise
@@ -66,15 +79,18 @@ class EmailService:
         linkedin_preview: str,
         approve_url: str,
         reject_url: str,
-    ) -> dict:
+    ) -> None:
         """Send an approval request email with approve/reject links."""
+        recipients = settings.email_recipients[:1]  # approval to primary only
         html = f"""
-        <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2>📋 AI News Pipeline — Review Required</h2>
+        <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                    max-width: 600px; margin: 0 auto;">
+            <h2>AI News Pipeline - Review Required</h2>
             <p>Run <code>{run_id}</code> has generated content ready for publishing.</p>
 
             <h3>LinkedIn Post Preview:</h3>
-            <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; white-space: pre-wrap;">
+            <div style="background: #f5f5f5; padding: 16px; border-radius: 8px;
+                        white-space: pre-wrap;">
                 {linkedin_preview[:1500]}
             </div>
 
@@ -82,26 +98,30 @@ class EmailService:
                 <a href="{approve_url}"
                    style="background: #0a66c2; color: white; padding: 12px 32px;
                           border-radius: 6px; text-decoration: none; margin-right: 12px;">
-                    ✅ Approve & Publish
+                    Approve &amp; Publish
                 </a>
                 <a href="{reject_url}"
                    style="background: #dc3545; color: white; padding: 12px 32px;
                           border-radius: 6px; text-decoration: none;">
-                    ❌ Reject & Revise
+                    Reject &amp; Revise
                 </a>
             </div>
 
             <p style="margin-top: 24px; color: #666; font-size: 12px;">
-                These links expire in {settings.approval_token_expiry_hours} hours and can only be used once.
+                These links expire in {settings.approval_token_expiry_hours} hours.
             </p>
         </div>
         """
 
-        return resend.Emails.send(
-            {
-                "from": settings.email_from,
-                "to": settings.email_recipients[:1],  # approval goes to primary only
-                "subject": f"🔔 Approve AI Newsletter — Run {run_id[:8]}",
-                "html": html,
-            }
-        )
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"Approve AI Newsletter - Run {run_id[:8]}"
+        msg["From"] = settings.email_sender
+        msg["To"] = ", ".join(recipients)
+        msg.attach(MIMEText(html, "html", "utf-8"))
+
+        try:
+            self._send(msg, recipients)
+            logger.info("approval_email_sent", run_id=run_id)
+        except Exception as e:
+            logger.error("approval_email_error", run_id=run_id, error=str(e))
+            raise

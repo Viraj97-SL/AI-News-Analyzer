@@ -11,7 +11,6 @@ dependencies = [
     "langgraph>=0.4.0",
     "langchain-core>=0.3.0",
     "langchain-google-genai>=2.1.0",
-    "langchain-tavily>=0.1.0",
     "langgraph-checkpoint-postgres>=3.0.4",
 
     # === Web framework ===
@@ -35,7 +34,6 @@ dependencies = [
     "httpx>=0.28.0",
 
     # === Email & publishing ===
-    "resend>=2.0.0",
     "requests-oauthlib>=2.0.0",
 
     # === Image generation ===
@@ -142,7 +140,6 @@ module = [
     "newspaper.*",
     "arxiv.*",
     "html2image.*",
-    "resend.*",
     "slowapi.*",
 ]
 ignore_missing_imports = true
