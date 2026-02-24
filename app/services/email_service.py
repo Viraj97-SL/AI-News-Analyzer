@@ -44,9 +44,7 @@ class EmailService:
                     path = Path(path_str)
                     if path.exists():
                         with open(path, "rb") as f:
-                            attachments.append(
-                                {"filename": path.name, "content": list(f.read())}
-                            )
+                            attachments.append({"filename": path.name, "content": list(f.read())})
                 if attachments:
                     params["attachments"] = attachments
 

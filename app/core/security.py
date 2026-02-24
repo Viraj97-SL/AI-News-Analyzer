@@ -66,8 +66,14 @@ def verify_approval_token(token: str, settings: Settings) -> dict:
 def sanitize_for_display(text: str) -> str:
     """Strip potential prompt injection patterns and sensitive markers from output."""
     dangerous_patterns = [
-        "SYSTEM:", "ASSISTANT:", "USER:", "```system",
-        "<|im_start|>", "<|im_end|>", "<<SYS>>", "<</SYS>>",
+        "SYSTEM:",
+        "ASSISTANT:",
+        "USER:",
+        "```system",
+        "<|im_start|>",
+        "<|im_end|>",
+        "<<SYS>>",
+        "<</SYS>>",
     ]
     sanitized = text
     for pattern in dangerous_patterns:

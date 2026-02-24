@@ -103,9 +103,7 @@ def credibility_node(state: PipelineState) -> dict:
         factual_score = 0.5
 
         # Weighted composite
-        final_score = (
-            0.4 * source_score + 0.3 * cross_ref_score + 0.3 * factual_score
-        )
+        final_score = 0.4 * source_score + 0.3 * cross_ref_score + 0.3 * factual_score
 
         scored_article = {**article, "credibility_score": round(final_score, 3)}
         scored.append(scored_article)

@@ -47,19 +47,15 @@ class Settings(BaseSettings):
     @property
     def sync_database_url(self) -> str:
         """For Alembic migrations (sync driver)."""
-        return (
-            self.database_url
-            .replace("postgresql+asyncpg://", "postgresql://")
-            .replace("sqlite+aiosqlite://", "sqlite://")
+        return self.database_url.replace("postgresql+asyncpg://", "postgresql://").replace(
+            "sqlite+aiosqlite://", "sqlite://"
         )
 
     @property
     def langgraph_pg_uri(self) -> str:
         """For langgraph-checkpoint-postgres (uses raw psycopg)."""
-        return (
-            self.database_url
-            .replace("postgresql+asyncpg://", "postgres://")
-            .replace("?sslmode=disable", "")
+        return self.database_url.replace("postgresql+asyncpg://", "postgres://").replace(
+            "?sslmode=disable", ""
         )
 
     # ── LLM: Gemini ────────────────────────────────────────
