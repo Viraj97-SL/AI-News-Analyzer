@@ -1,0 +1,89 @@
+<!-- 
+  Newsletter template — MJML (responsive email markup).
+  
+  Compile to HTML with: npx mjml app/templates/newsletter.mjml -o output/newsletter.html
+  Or use the mjml Python package for runtime compilation.
+  
+  This template uses Jinja2 placeholders ({{ }}) for dynamic content.
+-->
+<mjml>
+  <mj-head>
+    <mj-attributes>
+      <mj-all font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" />
+      <mj-text font-size="16px" line-height="1.6" color="#1e293b" />
+    </mj-attributes>
+    <mj-style>
+      .credibility-badge { 
+        display: inline-block; padding: 2px 8px; border-radius: 12px; 
+        font-size: 12px; font-weight: 600; 
+      }
+      .cred-high { background: #dcfce7; color: #166534; }
+      .cred-medium { background: #fef9c3; color: #854d0e; }
+      .cred-low { background: #fee2e2; color: #991b1b; }
+    </mj-style>
+  </mj-head>
+
+  <mj-body background-color="#f1f5f9">
+    <!-- Header -->
+    <mj-section background-color="#0f172a" padding="24px 32px">
+      <mj-column>
+        <mj-text color="#f8fafc" font-size="28px" font-weight="700">
+          🤖 AI/ML Weekly Digest
+        </mj-text>
+        <mj-text color="#94a3b8" font-size="14px">
+          {{ date }} — Your curated AI news, research, and insights
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Featured Story -->
+    {% if featured_story %}
+    <mj-section background-color="#ffffff" padding="32px" border-radius="8px">
+      <mj-column>
+        <mj-text font-size="12px" color="#3b82f6" font-weight="600" text-transform="uppercase" letter-spacing="1px">
+          ⭐ Featured Story
+        </mj-text>
+        {% if featured_image_url %}
+        <mj-image src="{{ featured_image_url }}" width="600px" border-radius="8px" padding-top="16px" />
+        {% endif %}
+        <mj-text font-size="22px" font-weight="700" padding-top="16px">
+          {{ featured_story.headline }}
+        </mj-text>
+        <mj-text>
+          {{ featured_story.body }}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+    {% endif %}
+
+    <!-- Story Summaries -->
+    {% for summary in summaries %}
+    <mj-section background-color="#ffffff" padding="24px 32px" border-radius="8px">
+      <mj-column>
+        <mj-text font-size="12px" color="#64748b" font-weight="600">
+          {{ summary.category | upper }}
+          <span class="credibility-badge {% if summary.credibility_score > 0.7 %}cred-high{% elif summary.credibility_score > 0.4 %}cred-medium{% else %}cred-low{% endif %}">
+            {{ (summary.credibility_score * 100) | int }}% credible
+          </span>
+        </mj-text>
+        <mj-text font-size="18px" font-weight="700" padding-top="8px">
+          {{ summary.headline }}
+        </mj-text>
+        <mj-text>{{ summary.body }}</mj-text>
+      </mj-column>
+    </mj-section>
+    <mj-section padding="4px" />
+    {% endfor %}
+
+    <!-- Footer -->
+    <mj-section padding="24px 32px">
+      <mj-column>
+        <mj-text align="center" color="#94a3b8" font-size="13px">
+          You're receiving this because you subscribed to the AI/ML Weekly Digest.
+          <br />
+          <a href="{{ unsubscribe_url }}" style="color: #3b82f6;">Unsubscribe</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            width: 1200px;
+            height: 627px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            overflow: hidden;
+        }
+
+        .card {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            color: #f8fafc;
+            padding: 48px 56px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899);
+        }
+
+        .top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .category {
+            background: #3b82f6;
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .credibility {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        .credibility span {
+            color: #22c55e;
+            font-weight: 700;
+        }
+
+        .headline {
+            font-size: 40px;
+            font-weight: 700;
+            line-height: 1.2;
+            margin: 24px 0 16px;
+            max-height: 200px;
+            overflow: hidden;
+        }
+
+        .body {
+            font-size: 20px;
+            line-height: 1.5;
+            color: #cbd5e1;
+            max-height: 90px;
+            overflow: hidden;
+        }
+
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid #334155;
+            padding-top: 20px;
+        }
+
+        .brand {
+            font-size: 16px;
+            font-weight: 600;
+            color: #64748b;
+        }
+
+        .brand span { color: #3b82f6; }
+
+        .sources {
+            font-size: 14px;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div>
+            <div class="top-row">
+                <div class="category">{{ category }}</div>
+                <div class="credibility">Credibility: <span>{{ credibility }}</span></div>
+            </div>
+            <h1 class="headline">{{ headline }}</h1>
+            <p class="body">{{ body }}</p>
+        </div>
+        <div class="footer">
+            <div class="brand"><span>AI</span> News Digest</div>
+            <div class="sources">{{ source_count }} sources verified</div>
+        </div>
+    </div>
+</body>
+</html>

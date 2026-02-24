@@ -1,0 +1,146 @@
+[project]
+name = "ai-news-summarizer"
+version = "0.1.0"
+description = "LangGraph multi-agent system for AI/ML news curation, summarization, and publishing"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "AI News Team" }]
+
+dependencies = [
+    # === LangChain / LangGraph core ===
+    "langgraph>=0.4.0",
+    "langchain-core>=0.3.0",
+    "langchain-google-genai>=2.1.0",
+    "langchain-tavily>=0.1.0",
+    "langgraph-checkpoint-postgres>=3.0.4",
+
+    # === Web framework ===
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "gunicorn>=23.0.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+
+    # === Database ===
+    "sqlalchemy[asyncio]>=2.0.36",
+    "alembic>=1.14.0",
+    "asyncpg>=0.30.0",
+    "aiosqlite>=0.20.0",
+
+    # === Data collection ===
+    "feedparser>=6.0.11",
+    "newspaper4k>=0.9.3",
+    "arxiv>=2.1.3",
+    "httpx>=0.28.0",
+
+    # === Email & publishing ===
+    "resend>=2.0.0",
+    "requests-oauthlib>=2.0.0",
+
+    # === Image generation ===
+    "html2image>=2.0.5",
+    "jinja2>=3.1.4",
+
+    # === Observability & security ===
+    "structlog>=24.4.0",
+    "asgi-correlation-id>=4.3.4",
+    "slowapi>=0.1.9",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+
+    # === Utilities ===
+    "python-dotenv>=1.0.1",
+    "redis>=5.2.0",
+    "tenacity>=9.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "vcrpy>=6.0.2",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "pre-commit>=4.0.0",
+    "types-redis>=4.6.0",
+]
+
+ml = [
+    # Local HuggingFace models for offline summarization / classification
+    "transformers>=4.47.0",
+    "torch>=2.5.0",
+    "sentencepiece>=0.2.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*", "cron*"]
+
+[build-system]
+requires = ["setuptools>=75.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# ──────────────────────────────────────────────
+# Ruff: linting + formatting
+# ──────────────────────────────────────────────
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "S",    # flake8-bandit (security)
+    "T20",  # flake8-print
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+    "RUF",  # ruff-specific rules
+]
+ignore = [
+    "S101",  # allow assert in tests
+    "S603",  # subprocess calls (needed for html2image)
+    "S607",  # partial executable path
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S106"]
+
+# ──────────────────────────────────────────────
+# Pytest
+# ──────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "unit: fast isolated tests",
+    "integration: tests hitting external services (use VCR cassettes)",
+    "slow: tests that take >10s",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+# ──────────────────────────────────────────────
+# Mypy
+# ──────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+    "feedparser.*",
+    "newspaper.*",
+    "arxiv.*",
+    "html2image.*",
+    "resend.*",
+    "slowapi.*",
+]
+ignore_missing_imports = true
