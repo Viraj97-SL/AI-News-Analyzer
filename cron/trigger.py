@@ -28,19 +28,7 @@ async def main() -> int:
     logger.info("cron_triggered", run_id=run_id, schedule="Tue/Thu 9AM UTC")
 
     try:
-        if settings.is_sqlite:
-            from langgraph.checkpoint.memory import InMemorySaver
-
-            checkpointer = InMemorySaver()
-        else:
-            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-
-            checkpointer = AsyncPostgresSaver.from_conn_string(settings.langgraph_pg_uri)
-            await checkpointer.setup()
-
         from app.agents.graph import build_graph
-
-        graph = build_graph(checkpointer=checkpointer)
 
         initial_state = {
             "run_id": run_id,
@@ -58,9 +46,25 @@ async def main() -> int:
             "total_cost": 0.0,
             "current_step": "starting",
         }
-
         config = {"configurable": {"thread_id": run_id}}
-        result = await graph.ainvoke(initial_state, config)
+
+        if settings.is_sqlite:
+            from langgraph.checkpoint.memory import InMemorySaver
+
+            checkpointer = InMemorySaver()
+            graph = build_graph(checkpointer=checkpointer)
+            result = await graph.ainvoke(initial_state, config)
+
+        else:
+            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+            # Notice the 'async with' here!
+            async with AsyncPostgresSaver.from_conn_string(settings.langgraph_pg_uri) as checkpointer:
+                await checkpointer.setup()
+
+                # The graph compilation and execution MUST be indented inside the async with block
+                graph = build_graph(checkpointer=checkpointer)
+                result = await graph.ainvoke(initial_state, config)
 
         logger.info(
             "cron_completed",
