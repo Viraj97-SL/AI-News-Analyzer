@@ -145,8 +145,8 @@ Read the full paper here: {paper['url']}
 
 
 def paperbanana_visual_node(state: PipelineState) -> dict:
-    """Uses PaperBanana Agentic workflow to generate system architecture."""
-    logger.info("research_node_running", step="generating_paperbanana_visual")
+    """Uses PaperBanana (if available) OR falls back to html2image for visuals."""
+    logger.info("research_node_running", step="generating_visual")
     analysis = state.get("deep_analysis", {})
     paper = state.get("chosen_research_paper", {})
     run_id = state.get("run_id", "test")
@@ -154,7 +154,7 @@ def paperbanana_visual_node(state: PipelineState) -> dict:
     image_paths = []
 
     try:
-        # Conceptual implementation of the PaperBanana Python SDK
+        # 1. Try the cutting-edge PaperBanana integration first
         import paperbanana as pb
         from pathlib import Path
 
@@ -162,25 +162,63 @@ def paperbanana_visual_node(state: PipelineState) -> dict:
         output_dir.mkdir(parents=True, exist_ok=True)
         filename = str(output_dir / f"diagram_{run_id}.png")
 
-        # Initialize the 5-agent framework to draw the architecture
         agent = pb.PaperBananaAgent(api_key=settings.google_api_key)
-
-        # We feed it the methodology so it knows what to draw
         diagram_path = agent.generate_architecture_diagram(
             title=paper.get("title", ""),
             methodology_text=analysis.get("methodology", ""),
             output_path=filename,
-            style="cyberpunk_dark"  # Matching your previous aesthetic!
+            style="cyberpunk_dark"
         )
 
         image_paths.append(diagram_path)
         logger.info("paperbanana_success", path=diagram_path)
 
     except ImportError:
-        logger.warning("paperbanana_sdk_missing", hint="pip install paperbanana")
-        # Fallback: If PaperBanana isn't installed yet, the email still sends perfectly without an image!
+        # 2. THE FALLBACK: If PaperBanana isn't installed, use our existing html2image engine!
+        logger.warning("paperbanana_sdk_missing", hint="Falling back to html2image Cyberpunk card.")
+
+        try:
+            from html2image import Html2Image
+            from jinja2 import Environment, FileSystemLoader, select_autoescape
+            from pathlib import Path
+
+            TEMPLATE_DIR = Path(__file__).parent.parent.parent / "templates"
+            OUTPUT_DIR = Path("./output/images")
+            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+            hti = Html2Image(
+                output_path=str(OUTPUT_DIR),
+                size=(1200, 627),
+                custom_flags=["--no-sandbox", "--hide-scrollbars", "--disable-gpu"],
+            )
+
+            env = Environment(
+                loader=FileSystemLoader(str(TEMPLATE_DIR)),
+                autoescape=select_autoescape(["html"]),
+            )
+            # Re-use your awesome dark mode template!
+            template = env.get_template("news_card.html")
+
+            # We map the deep analysis data into the card format
+            html = template.render(
+                headline=paper.get("title", "Deep Tech Research Update"),
+                body=analysis.get("core_problem", "")[:180] + "...",  # Show the core problem
+                category="DEEP TECH RESEARCH",
+                source_count="ARXIV",
+                credibility="99",  # Highly credible as it's an ArXiv paper
+                run_id=run_id,
+            )
+
+            filename = f"research_card_{run_id}.png"
+            hti.screenshot(html_str=html, save_as=filename)
+            image_paths.append(str(OUTPUT_DIR / filename))
+            logger.info("fallback_image_generated", path=filename)
+
+        except Exception as fallback_error:
+            logger.error("fallback_image_gen_failed", error=str(fallback_error))
+
     except Exception as e:
-        logger.error("paperbanana_generation_failed", error=str(e))
+        logger.error("visual_generation_failed", error=str(e))
 
     return {"image_paths": image_paths, "current_step": "visuals_generated"}
 
