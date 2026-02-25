@@ -182,7 +182,8 @@ def paperbanana_visual_node(state: PipelineState) -> dict:
             from jinja2 import Environment, FileSystemLoader, select_autoescape
             from pathlib import Path
 
-            TEMPLATE_DIR = Path(__file__).parent.parent.parent / "templates"
+            # Using 2 parents to properly target /app/templates
+            TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
             OUTPUT_DIR = Path("./output/images")
             OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -196,17 +197,16 @@ def paperbanana_visual_node(state: PipelineState) -> dict:
                 loader=FileSystemLoader(str(TEMPLATE_DIR)),
                 autoescape=select_autoescape(["html"]),
             )
-            # Re-use your awesome dark mode template!
-            template = env.get_template("news_card.html")
 
-            # We map the deep analysis data into the card format
+            # 1. Point to the NEW template
+            template = env.get_template("research_card.html")
+
+            # 2. Pass the deep analysis fields directly into the template
             html = template.render(
-                headline=paper.get("title", "Deep Tech Research Update"),
-                body=analysis.get("core_problem", "")[:180] + "...",  # Show the core problem
-                category="DEEP TECH RESEARCH",
-                source_count="ARXIV",
-                credibility="99",  # Highly credible as it's an ArXiv paper
-                run_id=run_id,
+                title=paper.get("title", "Deep Tech Research Update"),
+                core_problem=analysis.get("core_problem", "No problem specified."),
+                methodology=analysis.get("methodology", "No methodology specified."),
+                run_id=run_id[:8]  # Just use first 8 chars of run_id to keep it clean
             )
 
             filename = f"research_card_{run_id}.png"
