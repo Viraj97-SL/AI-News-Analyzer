@@ -1,6 +1,6 @@
 
 
-# 🌐 AI News Analyzer & Publisher
+# 🌐 AI News & Research Analyst
 
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109%2B-009688?logo=fastapi&logoColor=white)
@@ -9,31 +9,82 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Async_pg-4169E1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)
 
-An autonomous, multi-agent AI pipeline that acts as a fully automated AI research assistant and social media manager. Built with **LangGraph** and **FastAPI**, this system scrapes the latest AI/ML news, evaluates credibility, writes summaries using Google Gemini, generates cyberpunk-themed news cards, and waits for Human-in-the-Loop (HITL) email approval before publishing to LinkedIn and a newsletter.
+An autonomous, dual-pipeline AI media empire. Built with **LangGraph** and **FastAPI**, this system operates two independent multi-agent workflows:
+1. **The News Pipeline:** A high-volume AI news aggregator and summarizer.
+2. **The Research Pipeline:** A deep-tech academic analyst that isolates and breaks down complex ArXiv papers.
+
+Both pipelines feature Human-in-the-Loop (HITL) email approvals, dynamic cyberpunk-themed image generation, and automated social media publishing.
 
 ---
 
 ## ✨ Key Features
 
-- **Multi-Source Data Aggregation:** Parallel asynchronous scraping from ArXiv, RSS feeds (DeepMind, OpenAI, MIT Tech Review), Tavily Search, and Serper (Google News).
-- **Intelligent Deduplication & Scoring:** Automatically merges duplicate stories across sources and scores credibility based on domain reputation.
-- **Tiered LLM Routing:** Uses cost-effective models (Gemini Flash-Lite) for topic classification and high-reasoning models (Gemini Flash/Pro) for complex summarization and drafting.
-- **Human-in-the-Loop (HITL):** Pauses graph execution using LangGraph's `interrupt()` to send an admin email via Resend with secure, HMAC-signed JWT tokens for one-click **Approve** or **Reject** actions.
-- **Dynamic Image Generation:** Uses a headless Chromium browser (`html2image`) to render beautiful, cyberpunk/glassmorphism 1200x627px news cards using Jinja2 templates and CSS.
-- **Production-Ready:** Containerized with Docker, asynchronous database operations (SQLAlchemy + Asyncpg), and fully deployable to cloud platforms like Railway.
+- **Dual-Brain Architecture:** Completely isolated state machines for News (`graph.py`) and Research (`research_graph.py`) to prevent cross-contamination of prompts and context.
+- **Agentic Paper Selection:** Uses Gemini 2.5 Flash to rapidly scan 50+ ArXiv abstracts and select the single most groundbreaking paper of the week.
+- **Deep Thematic Analysis:** Uses Gemini 2.5 Pro to act as a Principal Investigator, extracting the Core Problem, Methodology, Breakthroughs, and Limitations of dense academic papers.
+- **Dynamic Cyberpunk Visuals:** Uses a headless Chromium browser (`html2image`) with Jinja2 and CSS to generate aesthetic, data-rich graphical cards for both standard news and deep research grid layouts.
+- **Human-in-the-Loop (HITL):** Pauses graph execution via LangGraph's `interrupt()` to send an admin email via Resend with secure, HMAC-signed JWT tokens for one-click **Approve** or **Reject** publishing.
+- **Future-Proofed for PaperBanana:** Built-in hooks to integrate cutting-edge agentic flowchart generation (PaperBanana) with automatic fallbacks to HTML-rendered visuals.
 
 ---
 
-## 🏗️ Pipeline Architecture
+### 🏗️ Pipeline Architectures
 
-The application is orchestrated as a directed acyclic graph (DAG) using **LangGraph**:
+````
+┌─────────────────────────────────────────────────────────┐
+│               Railway Cloud Environment                 │
+│  [ FastAPI Web ]   [ News Cron ]   [ Research Cron ]    │
+└───────────────────────────┬─────────────────────────────┘
+                            │
+         ┌──────────────────┴──────────────────┐
+         ▼                                     ▼
+┌─────────────────┐                   ┌──────────────────┐
+│ LangGraph Agent │                   │ LangGraph Agent  │
+│ (News Pipeline) │                   │(Research Analyst)│
+└────────┬────────┘                   └────────┬─────────┘
+         │                                     │
+         ├─ Scraper Tools                      ├─ ArXiv Specialist
+         │  ├─ Tavily Search API               │  └─ Queries cs.AI/cs.LG
+         │  ├─ Serper (Google News)            │
+         │  ├─ RSS Aggregator                  ├─ Paper Selection Agent
+         │  └─ ArXiv API                       │  └─ Gemini 2.5 Flash
+         │                                     │
+         ├─ Processing & NLP                   ├─ Deep Tech Analyst
+         │  ├─ Hash Deduplicator               │  ├─ Gemini 2.5 Pro
+         │  └─ Gemini Summarizer               │  └─ Extracts Methodology
+         │                                     │
+         ├─ Media Generation                   ├─ Media Generation
+         │  ├─ LinkedIn Hook Gen               │  ├─ Cyberpunk Grid Card
+         │  └─ html2image News Card            │  └─ (PaperBanana Hook)
+         │                                     │
+         └─ HITL Approval Node                 └─ HITL Approval Node
+                       │                       │
+                       └───────────┬───────────┘
+                                   ▼
+                 ┌───────────────────────────────────┐
+                 │    Publishing & Distribution      │
+                 │  ├─ Resend API (Approval Emails)  │
+                 │  └─ LinkedIn API (Post & Image)   │
+                 └───────────────────────────────────┘
+         
+┌─────────────────────────────────────────────────────────────┐
+│                    PostgreSQL (Railway)                     │
+│  agent_runs | summaries | news_articles | lg_checkpoints    │
+└─────────────────────────────────────────────────────────────┘
+````
+### 1. 📰 The News Pipeline (Runs Tuesdays)
+1. **Fan-Out Scraping:** Concurrently scrapes Tavily Search, Serper, ArXiv, and RSS feeds.
+2. **Deduplication & Scoring:** Merges duplicate stories and scores credibility based on domain reputation.
+3. **Summarization:** Gemini generates cost-effective categorized summaries.
+4. **Content & Image Gen:** Drafts a LinkedIn hook and renders a standard News Card.
+5. **Approval:** Halts state and awaits human email approval to publish.
 
-1. **`scrape_node`**: Fetches raw articles concurrently from diverse sources.
-2. **`summarize_node`**: Merges, deduplicates, and uses Gemini to categorize and summarize the most relevant AI stories.
-3. **`linkedin_gen_node`**: Acts as a social media strategist, drafting an engaging LinkedIn post with a hook and takeaways.
-4. **`image_gen_node`**: Generates dark-mode, neon-accented graphical cards for the articles.
-5. **`approval_node`**: Suspends the state machine and emails the preview to a human editor.
-6. **`publish_node` / `revise_node`**: Based on the secure URL clicked in the email, either publishes the content or routes back to the LLM with human feedback for revision.
+### 2. 🔬 The Research Pipeline (Runs Thursdays)
+1. **Narrow Scraping:** Exclusively pulls from ArXiv (`cs.AI`, `cs.LG`, etc.).
+2. **Select Best Paper:** Evaluates novelty and impact to isolate *one* primary paper.
+3. **Deep Analysis:** Generates a highly technical breakdown (Problem, Methodology, Limitations).
+4. **Visual Diagramming:** Generates a highly detailed Research Diagnostic grid card.
+5. **Approval:** Halts state and awaits human email approval to publish the deep dive.
 
 ---
 
@@ -48,8 +99,6 @@ The application is orchestrated as a directed acyclic graph (DAG) using **LangGr
 ```bash
 git clone [https://github.com/YourUsername/ai-news-analyzer.git](https://github.com/YourUsername/ai-news-analyzer.git)
 cd ai-news-analyzer
-
-# Create virtual environment and install dependencies
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -e ".[dev]"
@@ -58,23 +107,16 @@ pip install -e ".[dev]"
 
 ### 2. Environment Variables
 
-Create a `.env` file in the root directory. Copy the contents from `.env.example` and fill in your API keys:
+Create a `.env` file in the root directory:
 
 ```env
-# Core Database
-DATABASE_URL=sqlite+aiosqlite:///./test.db  # Use PostgreSQL for production
+DATABASE_URL=sqlite+aiosqlite:///./test.db 
 APP_ENV=development
-
-# Security
 API_KEY=your-secret-trigger-key
 APP_SECRET_KEY=generate-a-random-string
 JWT_SECRET=generate-a-random-string
-
-# AI & Search
 GOOGLE_API_KEY=your-gemini-key
 TAVILY_API_KEY=your-tavily-key
-
-# Email (Resend)
 RESEND_API_KEY=your-resend-key
 EMAIL_FROM=onboarding@resend.dev
 EMAIL_TO=your.email@example.com
@@ -88,55 +130,42 @@ uvicorn app.main:app --reload
 
 ```
 
-You can now access the interactive API documentation at `http://localhost:8000/docs`.
-
-### 4. Trigger a Pipeline Run
-
-You can trigger the multi-agent pipeline using curl:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/runs/trigger \
-  -H "X-API-Key: your-secret-trigger-key"
-
-```
+Interactive API documentation available at `http://localhost:8000/docs`.
 
 ---
 
-## 🐳 Docker Deployment
+## ⏱️ Production Deployment (Railway Cron Jobs)
 
-The project includes a multi-stage Dockerfile optimized for production, which automatically installs the necessary Chromium dependencies for image generation.
+This system is designed to be deployed as a microservice cluster on Railway.
 
-```bash
-# Build the image
-docker compose build
+**Service 1: The Web API (24/7)**
 
-# Run the database and web server
-docker compose up -d
+* **Builder:** Dockerfile
+* **Command:** Uses default Dockerfile command (`gunicorn`).
 
-```
+**Service 2: The News Aggregator (Tuesdays)**
 
----
+* **Builder:** Dockerfile
+* **Type:** Cron Job
+* **Schedule:** `0 9 * * 2` (Tuesday 9AM UTC)
+* **Command:** `python cron/trigger.py`
+* **Variables:** Ensure `PYTHONPATH=/app` is set.
 
-## ⏱️ Automated Scheduling (Cron)
+**Service 3: The Deep Tech Analyst (Thursdays)**
 
-For production, you can run the pipeline automatically (e.g., every Tuesday and Thursday at 9 AM UTC) using the provided trigger script.
-
-If deploying on a platform like Railway:
-
-1. Deploy the exact same repository as a secondary service.
-2. Set the service type to **Cron Job**.
-3. Set the schedule to `0 9 * * 2,4`.
-4. Set the Start Command to:
-
-```bash
-PYTHONPATH=/app python cron/trigger.py
-
-```
+* **Builder:** Dockerfile
+* **Type:** Cron Job
+* **Schedule:** `0 9 * * 4` (Thursday 9AM UTC)
+* **Command:** `python cron/research_trigger.py`
+* **Variables:** Ensure `PYTHONPATH=/app` is set.
 
 ---
 
-## 🛡️ License & Acknowledgements
+## 🛡️ Built With
 
-* Built using [LangGraph](https://python.langchain.com/docs/langgraph/) for stateful, multi-actor LLM applications.
-* UI inspiration for image generation features Dark Mode / Glassmorphism aesthetics.
+* [LangGraph](https://python.langchain.com/docs/langgraph/) - Stateful orchestration.
+* [FastAPI](https://fastapi.tiangolo.com/) - High-performance async web framework.
+* [Google Gemini](https://ai.google.dev/) - Multimodal reasoning and summarization.
+### VIRAJ BULUGAHAPITIYA - AI/ML ENGINEER
+```
 
