@@ -53,6 +53,7 @@ def human_approval_node(state: PipelineState) -> Command[Literal["publish", "rev
             linkedin_preview=state.get("linkedin_draft", ""),
             approve_url=approve_url,
             reject_url=reject_url,
+            image_paths=state.get("image_paths", []),  # PASS THE RAW FILE PATHS
         )
         logger.info("approval_email_sent", run_id=run_id)
     except Exception as e:

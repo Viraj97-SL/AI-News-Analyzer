@@ -74,19 +74,20 @@ class EmailService:
             raise
 
     def send_approval_email(
-        self,
-        run_id: str,
-        linkedin_preview: str,
-        approve_url: str,
-        reject_url: str,
+            self,
+            run_id: str,
+            linkedin_preview: str,
+            approve_url: str,
+            reject_url: str,
+            image_paths: list[str] | None = None,
     ) -> None:
-        """Send an approval request email with approve/reject links."""
-        recipients = settings.email_recipients[:1]  # approval to primary only
+        recipients = settings.email_recipients[:1]
+
         html = f"""
         <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif;
                     max-width: 600px; margin: 0 auto;">
-            <h2>AI News Pipeline - Review Required</h2>
-            <p>Run <code>{run_id}</code> has generated content ready for publishing.</p>
+            <h2>AI Pipeline - Review Required</h2>
+            <p>Run <code>{run_id[:8]}</code> has generated content ready for publishing.</p>
 
             <h3>LinkedIn Post Preview:</h3>
             <div style="background: #f5f5f5; padding: 16px; border-radius: 8px;
@@ -106,18 +107,30 @@ class EmailService:
                     Reject &amp; Revise
                 </a>
             </div>
-
-            <p style="margin-top: 24px; color: #666; font-size: 12px;">
-                These links expire in {settings.approval_token_expiry_hours} hours.
-            </p>
         </div>
         """
 
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"Approve AI Newsletter - Run {run_id[:8]}"
+        # "mixed" is required to allow file attachments
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = f"Approve AI Content - Run {run_id[:8]}"
         msg["From"] = settings.email_sender
         msg["To"] = ", ".join(recipients)
         msg.attach(MIMEText(html, "html", "utf-8"))
+
+        # THIS ATTACHES THE IMAGE FILE TO THE EMAIL
+        if image_paths:
+            for path_str in image_paths:
+                path = Path(path_str)
+                if path.exists():
+                    with open(path, "rb") as f:
+                        part = MIMEBase("application", "octet-stream")
+                        part.set_payload(f.read())
+                    encoders.encode_base64(part)
+                    part.add_header(
+                        "Content-Disposition",
+                        f'attachment; filename="{path.name}"',
+                    )
+                    msg.attach(part)
 
         try:
             self._send(msg, recipients)
