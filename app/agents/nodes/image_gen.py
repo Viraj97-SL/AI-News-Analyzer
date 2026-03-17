@@ -242,7 +242,7 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
     images[0].save(pdf_path, save_all=True, append_images=images[1:])
 
     logger.info("carousel_generated", slides=len(images), pdf=pdf_path)
-    return pdf_path
+    return pdf_path, slide_pngs
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -269,11 +269,13 @@ def image_gen_node(state: PipelineState) -> dict:
         image_paths = _generate_cards(summaries, run_id, env)
         logger.info("news_cards_generated", count=len(image_paths))
 
-        carousel_pdf = _generate_carousel_pdf(summaries, run_id, env)
+        carousel_result = _generate_carousel_pdf(summaries, run_id, env)
 
         result: dict = {"image_paths": image_paths, "current_step": "images_generated"}
-        if carousel_pdf:
-            result["carousel_pdf_path"] = carousel_pdf
+        if carousel_result:
+            pdf_path, slide_paths = carousel_result
+            result["carousel_pdf_path"] = pdf_path
+            result["carousel_slide_paths"] = slide_paths
 
         return result
 

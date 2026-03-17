@@ -45,8 +45,9 @@ class PipelineState(TypedDict):
     # ── Content generation ──────────────────────────────────
     newsletter_html: str
     linkedin_draft: str
-    image_paths: list[str]
-    carousel_pdf_path: NotRequired[str]  # LinkedIn carousel PDF (multi-slide document post)
+    image_paths: list[str]                        # 1200×627 cards used in email newsletter
+    carousel_slide_paths: NotRequired[list[str]]  # 1080×1080 PNG slides — sent in approval email preview
+    carousel_pdf_path: NotRequired[str]           # Combined PDF — uploaded to LinkedIn as document post
 
     # ── Human-in-the-loop ───────────────────────────────────
     approval_status: Literal["pending", "approved", "rejected"]

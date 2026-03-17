@@ -76,6 +76,8 @@ class NewsArticleModel(Base):
     content: Mapped[str] = mapped_column(Text)
     published_at: Mapped[str | None] = mapped_column(String(50), nullable=True)
     credibility_score: Mapped[float] = mapped_column(Float, default=0.0)
+    category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    relevance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
 
     run: Mapped[AgentRun] = relationship(back_populates="articles")
@@ -90,6 +92,7 @@ class SummaryModel(Base):
     body: Mapped[str] = mapped_column(Text)
     category: Mapped[str] = mapped_column(String(50))
     credibility_score: Mapped[float] = mapped_column(Float, default=0.0)
+    source_urls: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array
 
     run: Mapped[AgentRun] = relationship(back_populates="summaries")
 

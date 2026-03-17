@@ -30,6 +30,7 @@ from app.agents.nodes.scraper import (
     scrape_serper_node,
     scrape_tavily_node,
 )
+from app.agents.nodes.db_persist import persist_to_db_node
 from app.agents.nodes.summarizer import (
     analyze_node,
     deduplicate_node,
@@ -91,6 +92,7 @@ def build_graph(checkpointer=None) -> StateGraph:
     workflow.add_node("credibility", credibility_node)
     workflow.add_node("analyze", analyze_node)
     workflow.add_node("summarize", summarize_node)
+    workflow.add_node("persist_to_db", persist_to_db_node)
 
     # ── Content generation ──────────────────────────────────
     workflow.add_node("linkedin_gen", linkedin_gen_node)
@@ -116,7 +118,8 @@ def build_graph(checkpointer=None) -> StateGraph:
     workflow.add_edge("deduplicate", "credibility")
     workflow.add_edge("credibility", "analyze")
     workflow.add_edge("analyze", "summarize")
-    workflow.add_edge("summarize", "linkedin_gen")
+    workflow.add_edge("summarize", "persist_to_db")
+    workflow.add_edge("persist_to_db", "linkedin_gen")
     workflow.add_edge("linkedin_gen", "image_gen")
     workflow.add_edge("image_gen", "human_approval")
 
@@ -245,49 +248,55 @@ def _publish_node(state: PipelineState) -> dict:
         logger.error("newsletter_send_failed", run_id=run_id, error=str(e))
 
     # ── LinkedIn publishing ───────────────────────────────────────────────────
+    from app.agents.nodes.db_persist import persist_publish_result
+
+    li_post_id: str | None = None
+    li_post_type = "none"
+
     if linkedin_draft:
         li = LinkedInService()
 
         # Try carousel PDF first, then fall back to image, then text-only.
-        # Each level logs clearly so we know exactly which path executed.
         if carousel_pdf:
             try:
-                li.publish_document_post(
+                result = li.publish_document_post(
                     text=linkedin_draft,
                     pdf_path=carousel_pdf,
                     title="AI/ML Weekly Intelligence Brief",
                 )
-                logger.info("linkedin_carousel_post_done", run_id=run_id)
+                li_post_id = result.get("post_id")
+                li_post_type = "carousel"
+                logger.info("linkedin_carousel_post_done", run_id=run_id, post_id=li_post_id)
             except Exception as e:
-                logger.error(
-                    "linkedin_carousel_failed_falling_back",
-                    run_id=run_id,
-                    error=str(e),
-                )
-                carousel_pdf = None  # trigger fallback below
+                logger.error("linkedin_carousel_failed_falling_back", run_id=run_id, error=str(e))
+                carousel_pdf = None
 
         if not carousel_pdf:
             if image_paths:
                 try:
-                    li.publish_image_post(text=linkedin_draft, image_path=image_paths[0])
-                    logger.info("linkedin_image_post_done", run_id=run_id)
+                    result = li.publish_image_post(text=linkedin_draft, image_path=image_paths[0])
+                    li_post_id = result.get("post_id")
+                    li_post_type = "image"
+                    logger.info("linkedin_image_post_done", run_id=run_id, post_id=li_post_id)
                 except Exception as e:
-                    logger.error(
-                        "linkedin_image_failed_falling_back",
-                        run_id=run_id,
-                        error=str(e),
-                    )
+                    logger.error("linkedin_image_failed_falling_back", run_id=run_id, error=str(e))
                     try:
-                        li.publish_text_post(text=linkedin_draft)
+                        result = li.publish_text_post(text=linkedin_draft)
+                        li_post_id = result.get("post_id")
+                        li_post_type = "text"
                         logger.info("linkedin_text_post_done", run_id=run_id)
                     except Exception as e2:
                         logger.error("linkedin_text_failed", run_id=run_id, error=str(e2))
             else:
                 try:
-                    li.publish_text_post(text=linkedin_draft)
+                    result = li.publish_text_post(text=linkedin_draft)
+                    li_post_id = result.get("post_id")
+                    li_post_type = "text"
                     logger.info("linkedin_text_post_done", run_id=run_id)
                 except Exception as e:
                     logger.error("linkedin_text_failed", run_id=run_id, error=str(e))
+
+    persist_publish_result(run_id, li_post_id, li_post_type)
 
     return {"current_step": "published"}
 

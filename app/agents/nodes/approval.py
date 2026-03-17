@@ -48,12 +48,18 @@ def human_approval_node(state: PipelineState) -> Command[Literal["publish", "rev
         approve_url = f"{base}/api/v1/approvals/via-token?token={approve_token}"
         reject_url = f"{base}/api/v1/approvals/via-token?token={reject_token}"
 
+        # Prefer carousel slides (new infographic format) for preview.
+        # Fall back to old news cards only if carousel slides aren't available.
+        preview_paths = state.get("carousel_slide_paths") or state.get("image_paths", [])
+        # Send cover + snapshot + first story slide (max 3) to keep email size reasonable
+        preview_paths = [p for p in preview_paths[:3] if __import__("pathlib").Path(p).exists()]
+
         EmailService().send_approval_email(
             run_id=run_id,
             linkedin_preview=state.get("linkedin_draft", ""),
             approve_url=approve_url,
             reject_url=reject_url,
-            image_paths=state.get("image_paths", []),  # PASS THE RAW FILE PATHS
+            image_paths=preview_paths,
         )
         logger.info("approval_email_sent", run_id=run_id)
     except Exception as e:
