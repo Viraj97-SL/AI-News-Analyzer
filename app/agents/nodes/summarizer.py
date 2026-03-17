@@ -169,9 +169,11 @@ def _rank_score(article: dict) -> float:
 # Summarization — generate newsletter-ready summaries
 # ═══════════════════════════════════════════════════════════════
 SUMMARIZE_SYSTEM_PROMPT = """You are a senior AI/ML journalist writing a weekly newsletter.
-For each article provided, write a concise summary consisting of:
+For each article provided, write a detailed summary consisting of:
 1. A compelling headline (max 80 chars)
-2. A 2-3 sentence body capturing the key insight, why it matters, and any numbers/dates
+2. A 3-5 sentence body that covers: the core announcement or finding, specific numbers/metrics/dates, \
+why it matters to engineers and researchers, and broader industry implications. \
+Include any funding amounts, model sizes, benchmark scores, or performance gains mentioned.
 3. Categorise as one of: LLM, Computer Vision, Robotics, AI Policy, AI Startup, Research, Industry
 
 Output a JSON array with objects: {headline, body, category, source_url, credibility_score}.
@@ -199,7 +201,7 @@ def summarize_node(state: PipelineState) -> dict:
         article_context = "\n---\n".join(
             f"Title: {a['title']}\nSource: {a['source']}\nURL: {a['url']}\n"
             f"Credibility: {a['credibility_score']:.2f}\n"
-            f"Content: {a['content'][:500]}"
+            f"Content: {a['content'][:800]}"
             for a in top_articles
         )
 

@@ -123,7 +123,10 @@ class EmailService:
                 path = Path(path_str)
                 if path.exists():
                     with open(path, "rb") as f:
-                        part = MIMEBase("application", "octet-stream")
+                        if path.suffix.lower() == ".pdf":
+                            part = MIMEBase("application", "pdf")
+                        else:
+                            part = MIMEBase("application", "octet-stream")
                         part.set_payload(f.read())
                     encoders.encode_base64(part)
                     part.add_header(

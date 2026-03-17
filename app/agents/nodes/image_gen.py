@@ -83,9 +83,9 @@ def _extract_key_stat(body: str) -> dict | None:
 
 
 def _extract_key_points(body: str) -> list[str]:
-    """Split a summary body into 2–3 readable bullet points."""
+    """Split a summary body into up to 4 readable bullet points."""
     sentences = re.split(r"(?<=[.!?])\s+", body.strip())
-    return [s for s in sentences if len(s) > 15][:3]
+    return [s for s in sentences if len(s) > 20][:4]
 
 
 def _build_category_breakdown(summaries: list[dict]) -> list[dict]:
@@ -180,7 +180,7 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
     template = env.get_template("carousel_slide.html")
     hti = _make_hti((1080, 1080))
 
-    story_summaries = summaries[:7]
+    story_summaries = summaries[:10]
     total_slides = len(story_summaries)
     date_str = date.today().strftime("%B %d, %Y")
     categories = _build_category_breakdown(story_summaries)
@@ -237,12 +237,28 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
     slide_pngs.append(str(OUTPUT_DIR / name))
 
     # ── Combine PNGs → PDF ────────────────────────────────────
-    pdf_path = str(OUTPUT_DIR / f"carousel_{run_id}.pdf")
-    images = [Image.open(p).convert("RGB") for p in slide_pngs]
-    images[0].save(pdf_path, save_all=True, append_images=images[1:])
+    # Only include slides that were actually written to disk
+    existing_pngs = [p for p in slide_pngs if Path(p).exists()]
+    missing = len(slide_pngs) - len(existing_pngs)
+    if missing:
+        logger.warning("carousel_slides_missing", missing=missing, total=len(slide_pngs))
 
-    logger.info("carousel_generated", slides=len(images), pdf=pdf_path)
-    return pdf_path, slide_pngs
+    if not existing_pngs:
+        logger.error("carousel_no_slides_rendered")
+        return None
+
+    pdf_path = str(OUTPUT_DIR / f"carousel_{run_id}.pdf")
+    images = [Image.open(p).convert("RGB") for p in existing_pngs]
+    if len(images) == 1:
+        images[0].save(pdf_path)
+    else:
+        images[0].save(pdf_path, save_all=True, append_images=images[1:])
+    # Explicitly close image handles
+    for img in images:
+        img.close()
+
+    logger.info("carousel_generated", slides=len(existing_pngs), pdf=pdf_path)
+    return pdf_path, existing_pngs
 
 
 # ──────────────────────────────────────────────────────────────────────────────

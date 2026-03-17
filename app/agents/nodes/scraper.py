@@ -25,9 +25,17 @@ settings = get_settings()
 _TAVILY_API_URL = "https://api.tavily.com/search"
 _TAVILY_QUERIES = [
     "artificial intelligence machine learning news",
-    "large language model LLM new release 2025",
-    "AI startup funding product launch 2025",
+    "large language model LLM new release benchmark",
+    "AI startup funding product launch investment",
     "generative AI tools research breakthrough",
+    "AI regulation policy government legislation",
+    "AI healthcare medical diagnosis drug discovery",
+    "open source AI model release Hugging Face",
+    "AI robotics autonomous systems deployment",
+    "AI safety alignment interpretability research",
+    "AI in finance trading fraud detection",
+    "edge AI on-device inference hardware chip",
+    "multimodal AI vision language audio model",
 ]
 
 
@@ -104,11 +112,30 @@ def scrape_tavily_node(state: PipelineState) -> dict:
 # Tier 2: RSS Feed Aggregation
 # ═══════════════════════════════════════════════════════════════
 RSS_FEEDS = [
+    # ── Core tech journalism ──────────────────────────────────────────────────
     ("TechCrunch AI", "https://techcrunch.com/category/artificial-intelligence/feed/"),
     ("VentureBeat AI", "https://venturebeat.com/category/ai/feed/"),
     ("The Verge AI", "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"),
     ("MIT Tech Review", "https://www.technologyreview.com/feed/"),
+    ("Wired AI", "https://www.wired.com/feed/tag/artificial-intelligence/latest/rss"),
+    ("Ars Technica AI", "https://feeds.arstechnica.com/arstechnica/technology-lab"),
+    # ── AI-specific blogs & research ─────────────────────────────────────────
     ("Google AI Blog", "https://blog.google/technology/ai/rss/"),
+    ("OpenAI News", "https://openai.com/news/rss.xml"),
+    ("Hugging Face Blog", "https://huggingface.co/blog/feed.xml"),
+    ("DeepMind Blog", "https://deepmind.google/blog/rss/"),
+    # ── Policy, safety & broader impact ──────────────────────────────────────
+    ("AI Snake Oil", "https://www.aisnakeoil.com/feed"),
+    ("Import AI", "https://jack-clark.net/feed/"),
+    (
+        "Google News AI Policy",
+        "https://news.google.com/rss/search?q=AI+regulation+policy&hl=en-US&gl=US&ceid=US:en",
+    ),
+    # ── Industry verticals ────────────────────────────────────────────────────
+    (
+        "Google News AI Healthcare",
+        "https://news.google.com/rss/search?q=AI+healthcare+medical&hl=en-US&gl=US&ceid=US:en",
+    ),
     (
         "Google News AI",
         "https://news.google.com/rss/search?q=artificial+intelligence+machine+learning&hl=en-US&gl=US&ceid=US:en",
@@ -203,34 +230,49 @@ def scrape_arxiv_node(state: PipelineState) -> dict:
 # ═══════════════════════════════════════════════════════════════
 # Tier 4: Serper.dev (Google News fallback)
 # ═══════════════════════════════════════════════════════════════
+_SERPER_QUERIES = [
+    "AI machine learning news this week",
+    "AI startup funding announcement",
+    "open source AI model release",
+]
+
+
 def scrape_serper_node(state: PipelineState) -> dict:
-    """Search Google News via Serper as a fallback/gap-filler."""
+    """Search Google News via Serper across multiple diverse queries."""
     if not settings.serper_api_key or settings.serper_api_key.startswith("your-"):
         logger.info("serper_skipped", reason="no API key configured")
         return {"raw_articles": []}
 
     try:
         articles: list[NewsArticle] = []
+        seen_urls: set[str] = set()
         with httpx.Client(timeout=15) as client:
-            resp = client.post(
-                "https://google.serper.dev/news",
-                headers={"X-API-KEY": settings.serper_api_key},
-                json={"q": "AI machine learning news", "num": 10},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-
-        for item in data.get("news", []):
-            articles.append(
-                NewsArticle(
-                    title=item.get("title", "Untitled"),
-                    url=item.get("link", ""),
-                    source="serper",
-                    content=item.get("snippet", ""),
-                    published_at=item.get("date", datetime.now(UTC).isoformat()),
-                    credibility_score=0.0,
-                )
-            )
+            for query in _SERPER_QUERIES:
+                try:
+                    resp = client.post(
+                        "https://google.serper.dev/news",
+                        headers={"X-API-KEY": settings.serper_api_key},
+                        json={"q": query, "num": 10},
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    for item in data.get("news", []):
+                        url = item.get("link", "")
+                        if not url or url in seen_urls:
+                            continue
+                        seen_urls.add(url)
+                        articles.append(
+                            NewsArticle(
+                                title=item.get("title", "Untitled"),
+                                url=url,
+                                source="serper",
+                                content=item.get("snippet", ""),
+                                published_at=item.get("date", datetime.now(UTC).isoformat()),
+                                credibility_score=0.0,
+                            )
+                        )
+                except Exception as e:
+                    logger.warning("serper_query_failed", query=query, error=str(e))
 
         logger.info("serper_scraped", article_count=len(articles))
         return {"raw_articles": articles}
