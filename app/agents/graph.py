@@ -163,6 +163,50 @@ def _build_newsletter_html(summaries: list, run_id: str) -> str:
 </body></html>"""
 
 
+def _ensure_images(state: dict, run_id: str) -> tuple[list[str], str | None]:
+    """
+    Return (image_paths, carousel_pdf_path) — regenerating from state summaries
+    if the previously-generated files no longer exist on this container's filesystem.
+
+    Railway runs the cron pipeline and the FastAPI web server in separate containers.
+    Files generated during the cron run are lost when that container exits.
+    Summaries are persisted in the LangGraph checkpoint (PostgreSQL), so we can
+    always regenerate images at publish time.
+    """
+    from pathlib import Path
+
+    from app.agents.nodes.image_gen import (
+        OUTPUT_DIR,
+        TEMPLATE_DIR,
+        _generate_cards,
+        _generate_carousel_pdf,
+    )
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+    summaries = state.get("summaries", [])
+    if not summaries:
+        return [], None
+
+    existing_paths = [p for p in state.get("image_paths", []) if Path(p).exists()]
+    existing_pdf = state.get("carousel_pdf_path")
+    pdf_exists = bool(existing_pdf and Path(existing_pdf).exists())
+
+    if existing_paths and pdf_exists:
+        # Files are still there (same container session)
+        return existing_paths, existing_pdf
+
+    # Files are missing — regenerate from state summaries
+    logger.info("regenerating_images_from_state", run_id=run_id, reason="files_missing_on_this_container")
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    env = Environment(
+        loader=FileSystemLoader(str(TEMPLATE_DIR)),
+        autoescape=select_autoescape(["html"]),
+    )
+    new_paths = _generate_cards(summaries, run_id, env) if not existing_paths else existing_paths
+    new_pdf = _generate_carousel_pdf(summaries, run_id, env) if not pdf_exists else existing_pdf
+    return new_paths, new_pdf
+
+
 def _publish_node(state: PipelineState) -> dict:
     """Send email newsletter and publish LinkedIn carousel + post."""
     from app.services.email_service import EmailService
@@ -170,15 +214,22 @@ def _publish_node(state: PipelineState) -> dict:
 
     run_id = state["run_id"]
     summaries = state.get("summaries", [])
-    image_paths = state.get("image_paths", [])
     linkedin_draft = state.get("linkedin_draft", "")
-    carousel_pdf = state.get("carousel_pdf_path")
 
     logger.info(
         "publishing",
         run_id=run_id,
         summaries=len(summaries),
         linkedin_chars=len(linkedin_draft),
+    )
+
+    # Ensure image files exist on THIS container (regenerates if cron ran elsewhere)
+    image_paths, carousel_pdf = _ensure_images(state, run_id)
+
+    logger.info(
+        "publish_assets_ready",
+        run_id=run_id,
+        image_count=len(image_paths),
         has_carousel=bool(carousel_pdf),
     )
 
@@ -195,25 +246,48 @@ def _publish_node(state: PipelineState) -> dict:
 
     # ── LinkedIn publishing ───────────────────────────────────────────────────
     if linkedin_draft:
-        try:
-            li = LinkedInService()
-            if carousel_pdf:
-                # Preferred: publish as a swipeable PDF carousel (higher reach)
+        li = LinkedInService()
+
+        # Try carousel PDF first, then fall back to image, then text-only.
+        # Each level logs clearly so we know exactly which path executed.
+        if carousel_pdf:
+            try:
                 li.publish_document_post(
                     text=linkedin_draft,
                     pdf_path=carousel_pdf,
                     title="AI/ML Weekly Intelligence Brief",
                 )
                 logger.info("linkedin_carousel_post_done", run_id=run_id)
-            elif image_paths:
-                # Fallback: single image post
-                li.publish_image_post(text=linkedin_draft, image_path=image_paths[0])
-                logger.info("linkedin_image_post_done", run_id=run_id)
+            except Exception as e:
+                logger.error(
+                    "linkedin_carousel_failed_falling_back",
+                    run_id=run_id,
+                    error=str(e),
+                )
+                carousel_pdf = None  # trigger fallback below
+
+        if not carousel_pdf:
+            if image_paths:
+                try:
+                    li.publish_image_post(text=linkedin_draft, image_path=image_paths[0])
+                    logger.info("linkedin_image_post_done", run_id=run_id)
+                except Exception as e:
+                    logger.error(
+                        "linkedin_image_failed_falling_back",
+                        run_id=run_id,
+                        error=str(e),
+                    )
+                    try:
+                        li.publish_text_post(text=linkedin_draft)
+                        logger.info("linkedin_text_post_done", run_id=run_id)
+                    except Exception as e2:
+                        logger.error("linkedin_text_failed", run_id=run_id, error=str(e2))
             else:
-                li.publish_text_post(text=linkedin_draft)
-                logger.info("linkedin_text_post_done", run_id=run_id)
-        except Exception as e:
-            logger.error("linkedin_publish_failed", run_id=run_id, error=str(e))
+                try:
+                    li.publish_text_post(text=linkedin_draft)
+                    logger.info("linkedin_text_post_done", run_id=run_id)
+                except Exception as e:
+                    logger.error("linkedin_text_failed", run_id=run_id, error=str(e))
 
     return {"current_step": "published"}
 
