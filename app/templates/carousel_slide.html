@@ -7,10 +7,13 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
 
         :root {
-            --neon-blue: #00f3ff;
-            --neon-purple: #9d00ff;
-            --neon-green: #00ff9d;
-            --dark-bg: #05050a;
+            --blue:   #00f3ff;
+            --purple: #9d00ff;
+            --green:  #00ff9d;
+            --yellow: #ffe600;
+            --orange: #ff6b35;
+            --pink:   #ff2d78;
+            --bg:     #05050a;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -19,19 +22,18 @@
             width: 1080px;
             height: 1080px;
             font-family: 'Inter', sans-serif;
-            background-color: var(--dark-bg);
+            background: var(--bg);
             overflow: hidden;
             position: relative;
         }
 
-        /* Subtle grid overlay */
         body::before {
             content: "";
             position: absolute;
             inset: 0;
             background-image:
-                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+                linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
             background-size: 40px 40px;
             z-index: 0;
         }
@@ -41,318 +43,702 @@
             width: 1080px;
             height: 1080px;
             z-index: 1;
-            padding: 64px;
+            padding: 56px 60px;
             display: flex;
             flex-direction: column;
         }
 
-        /* ───────────────────────────────
+        /* ══════════════════════════════════════
+           SHARED COMPONENTS
+        ══════════════════════════════════════ */
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 22px;
+            border-radius: 30px;
+            font-weight: 800;
+            font-size: 13px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+
+        .chip-outline {
+            border: 1px solid rgba(0,243,255,0.5);
+            color: var(--blue);
+        }
+
+        .chip-solid {
+            background: linear-gradient(135deg, var(--blue), var(--purple));
+            color: #fff;
+            box-shadow: 0 0 18px rgba(0,243,255,0.3);
+        }
+
+        /* Progress dots */
+        .progress-dots {
+            display: flex;
+            gap: 7px;
+            align-items: center;
+        }
+        .progress-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+        }
+        .progress-dot.done { background: var(--blue); }
+
+        /* Section label */
+        .section-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.35);
+            margin-bottom: 8px;
+        }
+
+        /* Filled bar */
+        .bar-track {
+            height: 8px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .bar-fill {
+            height: 100%;
+            border-radius: 4px;
+        }
+        .bar-fill.blue   { background: linear-gradient(90deg, var(--blue), var(--purple)); }
+        .bar-fill.green  { background: var(--green); }
+        .bar-fill.yellow { background: var(--yellow); }
+
+        /* Slide footer */
+        .slide-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255,255,255,0.07);
+            margin-top: auto;
+        }
+        .footer-left  { font-size: 13px; color: var(--green);  font-weight: 700; letter-spacing: 1px; }
+        .footer-right { font-size: 12px; color: rgba(255,255,255,0.2); font-weight: 600; letter-spacing: 2px; text-transform: uppercase; }
+
+        /* ══════════════════════════════════════
            COVER SLIDE
-        ─────────────────────────────── */
+        ══════════════════════════════════════ */
+
         .cover {
             background:
-                radial-gradient(circle at 20% 30%, rgba(157,0,255,0.55) 0%, transparent 50%),
-                radial-gradient(circle at 80% 75%, rgba(0,243,255,0.4) 0%, transparent 50%),
-                var(--dark-bg);
+                radial-gradient(circle at 18% 28%, rgba(157,0,255,0.55) 0%, transparent 48%),
+                radial-gradient(circle at 82% 72%, rgba(0,243,255,0.38) 0%, transparent 48%),
+                var(--bg);
             justify-content: center;
             align-items: center;
             text-align: center;
-            gap: 28px;
+            gap: 0;
         }
 
-        .cover-label {
-            font-size: 16px;
-            font-weight: 700;
-            letter-spacing: 5px;
-            text-transform: uppercase;
-            color: var(--neon-blue);
-            border: 1px solid rgba(0,243,255,0.5);
-            padding: 10px 28px;
-            border-radius: 30px;
-        }
+        .cover-top-chip { margin-bottom: 32px; }
 
-        .cover-count {
-            font-size: 130px;
+        .cover-number {
+            font-size: 140px;
             font-weight: 900;
             line-height: 1;
-            background: linear-gradient(135deg, var(--neon-purple), var(--neon-blue));
+            background: linear-gradient(135deg, var(--purple) 0%, var(--blue) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
         }
 
         .cover-title {
-            font-size: 58px;
+            font-size: 52px;
             font-weight: 900;
             line-height: 1.15;
-            background: linear-gradient(to right, #fff 40%, #b0c8ff 100%);
+            background: linear-gradient(to right, #fff 30%, #b8d0ff 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            margin-bottom: 14px;
         }
 
         .cover-subtitle {
-            font-size: 22px;
-            color: rgba(255,255,255,0.55);
+            font-size: 20px;
+            color: rgba(255,255,255,0.45);
             line-height: 1.5;
+            margin-bottom: 40px;
         }
 
+        /* Category chips row */
+        .cover-categories {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 36px;
+        }
+
+        .cat-chip {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 30px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.05);
+        }
+        .cat-chip-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .cat-chip-name { font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.7); letter-spacing: 1px; text-transform: uppercase; }
+        .cat-chip-count { font-size: 15px; font-weight: 900; color: #fff; }
+
         .cover-date {
-            font-size: 14px;
-            color: rgba(255,255,255,0.35);
+            font-size: 13px;
+            color: rgba(255,255,255,0.28);
             letter-spacing: 3px;
             text-transform: uppercase;
-            margin-top: 8px;
         }
 
         .swipe-hint {
             position: absolute;
-            bottom: 56px;
-            right: 64px;
-            font-size: 16px;
-            color: rgba(255,255,255,0.45);
+            bottom: 52px;
+            right: 60px;
+            font-size: 14px;
+            color: rgba(255,255,255,0.4);
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             letter-spacing: 1px;
         }
+        .swipe-arrow { color: var(--blue); font-size: 20px; }
 
-        .swipe-arrow {
-            font-size: 22px;
-            color: var(--neon-blue);
-        }
+        /* ══════════════════════════════════════
+           WEEK IN NUMBERS SLIDE
+        ══════════════════════════════════════ */
 
-        /* ───────────────────────────────
-           STORY SLIDE
-        ─────────────────────────────── */
-        .story {
+        .snapshot {
             background:
-                radial-gradient(circle at 88% 12%, rgba(157,0,255,0.3) 0%, transparent 45%),
-                radial-gradient(circle at 12% 88%, rgba(0,243,255,0.2) 0%, transparent 45%),
-                var(--dark-bg);
+                radial-gradient(circle at 90% 10%, rgba(0,243,255,0.25) 0%, transparent 45%),
+                radial-gradient(circle at 10% 90%, rgba(157,0,255,0.25) 0%, transparent 45%),
+                var(--bg);
         }
 
-        .story-topbar {
+        .snapshot-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 44px;
         }
 
-        .category-badge {
-            background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple));
-            color: #fff;
-            padding: 10px 26px;
-            border-radius: 30px;
-            font-weight: 800;
+        .snapshot-title {
+            font-size: 28px;
+            font-weight: 900;
+            background: linear-gradient(to right, #fff, #b8d0ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* 2×2 stat boxes */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 44px;
+        }
+
+        .stat-box {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 20px;
+            padding: 32px 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .stat-box-icon { font-size: 28px; margin-bottom: 8px; }
+        .stat-box-value {
+            font-size: 64px;
+            font-weight: 900;
+            line-height: 1;
+        }
+        .stat-box-label {
+            font-size: 15px;
+            color: rgba(255,255,255,0.5);
+            font-weight: 600;
+            letter-spacing: 1px;
             text-transform: uppercase;
-            letter-spacing: 1.5px;
-            font-size: 14px;
-            box-shadow: 0 0 20px rgba(0,243,255,0.35);
         }
 
-        .slide-counter {
-            font-size: 16px;
-            color: rgba(255,255,255,0.35);
+        .val-blue   { color: var(--blue);   }
+        .val-purple { color: var(--purple); }
+        .val-green  { color: var(--green);  }
+        .val-yellow { color: var(--yellow); }
+
+        /* Category breakdown bars */
+        .breakdown-title {
+            font-size: 13px;
             font-weight: 700;
-            letter-spacing: 2px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.35);
+            margin-bottom: 20px;
         }
 
-        .slide-counter .current {
-            color: var(--neon-blue);
-            font-size: 22px;
+        .breakdown-rows {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            flex-grow: 1;
+        }
+
+        .breakdown-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .breakdown-cat {
+            width: 130px;
+            font-size: 13px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.6);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            flex-shrink: 0;
+        }
+
+        .breakdown-bar-wrap {
+            flex-grow: 1;
+            height: 10px;
+            background: rgba(255,255,255,0.07);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .breakdown-bar-fill {
+            height: 100%;
+            border-radius: 5px;
+        }
+
+        .breakdown-count {
+            width: 60px;
+            font-size: 14px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.5);
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        /* ══════════════════════════════════════
+           STORY SLIDE
+        ══════════════════════════════════════ */
+
+        .story {
+            background:
+                radial-gradient(circle at 90% 10%, rgba(157,0,255,0.28) 0%, transparent 42%),
+                radial-gradient(circle at 10% 90%, rgba(0,243,255,0.18) 0%, transparent 42%),
+                var(--bg);
+        }
+
+        .story-topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
         }
 
         .story-headline {
-            font-size: 46px;
+            font-size: 40px;
             font-weight: 900;
             line-height: 1.2;
-            background: linear-gradient(to right, #ffffff, #c8d8ff);
+            background: linear-gradient(to right, #ffffff, #c5d5ff);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            margin-bottom: 30px;
+            margin-bottom: 24px;
         }
 
         .divider {
             height: 2px;
-            background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple), transparent);
-            margin-bottom: 36px;
+            background: linear-gradient(90deg, var(--blue), var(--purple), transparent);
             border-radius: 1px;
+            margin-bottom: 28px;
             flex-shrink: 0;
         }
 
+        /* Two-column content area */
+        .story-content {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 28px;
+            flex-grow: 1;
+            min-height: 0;
+        }
+
+        /* LEFT: bullet points */
         .key-points {
             display: flex;
             flex-direction: column;
-            gap: 20px;
-            flex-grow: 1;
+            gap: 16px;
         }
 
         .key-point {
             display: flex;
             align-items: flex-start;
-            gap: 18px;
-            background: rgba(255,255,255,0.04);
+            gap: 14px;
+            background: rgba(255,255,255,0.035);
             border: 1px solid rgba(255,255,255,0.07);
-            border-left: 3px solid var(--neon-blue);
-            border-radius: 0 14px 14px 0;
-            padding: 18px 22px;
+            border-left: 3px solid var(--blue);
+            border-radius: 0 12px 12px 0;
+            padding: 16px 18px;
         }
 
         .point-icon {
-            font-size: 18px;
+            font-size: 16px;
             flex-shrink: 0;
-            margin-top: 4px;
-            color: var(--neon-blue);
+            margin-top: 3px;
+            color: var(--blue);
         }
 
         .point-text {
-            font-size: 20px;
+            font-size: 18px;
             line-height: 1.55;
             color: rgba(255,255,255,0.82);
         }
 
-        .story-footer {
+        /* RIGHT: stat callout + bars */
+        .story-right {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        /* Key stat callout box */
+        .stat-callout {
+            background: rgba(0,243,255,0.07);
+            border: 1px solid rgba(0,243,255,0.25);
+            border-radius: 18px;
+            padding: 24px 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .stat-callout-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--blue);
+            margin-bottom: 10px;
+        }
+
+        .stat-callout-value {
+            font-size: 48px;
+            font-weight: 900;
+            color: #fff;
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+
+        .stat-callout-context {
+            font-size: 14px;
+            color: rgba(255,255,255,0.5);
+            line-height: 1.4;
+        }
+
+        /* No-stat placeholder */
+        .stat-callout.empty {
+            background: rgba(255,255,255,0.025);
+            border-color: rgba(255,255,255,0.07);
+        }
+
+        .stat-callout.empty .stat-callout-value {
+            font-size: 32px;
+            color: rgba(255,255,255,0.3);
+        }
+
+        /* Credibility bar */
+        .cred-section { flex-shrink: 0; }
+        .cred-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .cred-label { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.35); }
+        .cred-value { font-size: 13px; font-weight: 900; color: var(--green); }
+
+        /* Source dots */
+        .source-section { flex-shrink: 0; }
+        .source-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 28px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255,255,255,0.07);
+            margin-bottom: 10px;
         }
-
-        .credibility-badge {
-            font-size: 13px;
-            color: var(--neon-green);
-            font-weight: 700;
-            letter-spacing: 1px;
-            border: 1px solid rgba(0,255,157,0.35);
-            padding: 7px 16px;
-            border-radius: 20px;
+        .source-dots {
+            display: flex;
+            gap: 6px;
         }
-
-        .brand-tag {
-            font-size: 13px;
-            color: rgba(255,255,255,0.25);
-            font-weight: 600;
-            letter-spacing: 2px;
-            text-transform: uppercase;
+        .source-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.12);
         }
+        .source-dot.active { background: var(--green); box-shadow: 0 0 6px rgba(0,255,157,0.6); }
 
-        /* ───────────────────────────────
+        /* Impact band (relevance fill bar at very bottom of right col) */
+        .impact-section { flex-shrink: 0; margin-top: auto; }
+
+        /* ══════════════════════════════════════
            CLOSING SLIDE
-        ─────────────────────────────── */
+        ══════════════════════════════════════ */
+
         .closing {
             background:
-                radial-gradient(circle at 50% 40%, rgba(157,0,255,0.45) 0%, transparent 55%),
-                radial-gradient(circle at 80% 85%, rgba(0,243,255,0.3) 0%, transparent 50%),
-                var(--dark-bg);
+                radial-gradient(circle at 50% 38%, rgba(157,0,255,0.45) 0%, transparent 52%),
+                radial-gradient(circle at 82% 82%, rgba(0,243,255,0.28) 0%, transparent 46%),
+                var(--bg);
             justify-content: center;
             align-items: center;
             text-align: center;
-            gap: 30px;
+            gap: 28px;
         }
 
-        .closing-icon {
-            font-size: 80px;
-            line-height: 1;
-        }
+        .closing-icon { font-size: 76px; line-height: 1; }
 
         .closing-question {
-            font-size: 40px;
+            font-size: 38px;
             font-weight: 900;
             line-height: 1.3;
-            background: linear-gradient(135deg, #fff 0%, var(--neon-blue) 100%);
+            background: linear-gradient(135deg, #fff 0%, var(--blue) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            max-width: 860px;
+            max-width: 840px;
         }
 
-        .closing-cta {
-            font-size: 20px;
-            color: rgba(255,255,255,0.55);
+        .closing-sub {
+            font-size: 19px;
+            color: rgba(255,255,255,0.5);
             line-height: 1.6;
+            max-width: 680px;
         }
 
         .closing-follow {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 14px;
             background: rgba(255,255,255,0.05);
             border: 1px solid rgba(0,243,255,0.3);
             border-radius: 50px;
-            padding: 18px 40px;
+            padding: 16px 38px;
         }
 
-        .follow-text {
-            font-size: 19px;
-            color: #fff;
-            font-weight: 700;
-        }
+        .closing-follow-text { font-size: 18px; color: #fff; font-weight: 700; }
 
         .closing-note {
-            font-size: 15px;
-            color: rgba(255,255,255,0.28);
-            margin-top: -8px;
+            font-size: 14px;
+            color: rgba(255,255,255,0.25);
             letter-spacing: 0.5px;
         }
     </style>
 </head>
 <body>
 
-{# ─── COVER SLIDE ─── #}
+{# ══════════════════════════════════════════════════════════
+   COVER SLIDE
+══════════════════════════════════════════════════════════ #}
 {% if slide_type == "cover" %}
 <div class="slide cover">
-    <div class="cover-label">Weekly AI Intelligence Brief</div>
-    <div class="cover-count">{{ story_count }}</div>
+    <div class="chip chip-outline cover-top-chip">Weekly AI Intelligence Brief</div>
+    <div class="cover-number">{{ story_count }}</div>
     <div class="cover-title">AI Stories That<br>Matter This Week</div>
-    <div class="cover-subtitle">Curated, verified &amp; ranked by importance<br>for engineers and researchers</div>
-    <div class="cover-date">{{ date_str }}</div>
-    <div class="swipe-hint">
-        Swipe to explore <span class="swipe-arrow">→</span>
+    <div class="cover-subtitle">Curated · verified · ranked by importance<br>for engineers &amp; researchers</div>
+
+    {# Category breakdown chips #}
+    {% if categories %}
+    <div class="cover-categories">
+        {% for cat in categories %}
+        <div class="cat-chip">
+            <div class="cat-chip-dot" style="background: {{ cat.color }};"></div>
+            <span class="cat-chip-name">{{ cat.name }}</span>
+            <span class="cat-chip-count">{{ cat.count }}</span>
+        </div>
+        {% endfor %}
     </div>
+    {% endif %}
+
+    <div class="cover-date">{{ date_str }}</div>
+    <div class="swipe-hint">Swipe to explore <span class="swipe-arrow">→</span></div>
 </div>
 
-{# ─── STORY SLIDE ─── #}
-{% elif slide_type == "story" %}
-<div class="slide story">
-    <div class="story-topbar">
-        <div class="category-badge">{{ category }}</div>
-        <div class="slide-counter"><span class="current">{{ slide_num }}</span> / {{ total_slides }}</div>
+
+{# ══════════════════════════════════════════════════════════
+   WEEK IN NUMBERS SLIDE
+══════════════════════════════════════════════════════════ #}
+{% elif slide_type == "snapshot" %}
+<div class="slide snapshot">
+    <div class="snapshot-header">
+        <div class="snapshot-title">This Week in AI — By the Numbers</div>
+        <div class="chip chip-outline">Data Snapshot</div>
     </div>
 
-    <div class="story-headline">{{ headline }}</div>
-    <div class="divider"></div>
+    {# 4 big stat boxes #}
+    <div class="stat-grid">
+        <div class="stat-box">
+            <div class="stat-box-icon">📰</div>
+            <div class="stat-box-value val-blue">{{ stats.story_count }}</div>
+            <div class="stat-box-label">Stories Curated</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-box-icon">🔗</div>
+            <div class="stat-box-value val-purple">{{ stats.source_count }}</div>
+            <div class="stat-box-label">Sources Verified</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-box-icon">✅</div>
+            <div class="stat-box-value val-green">{{ stats.avg_credibility }}</div>
+            <div class="stat-box-label">Avg. Credibility</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-box-icon">🗂️</div>
+            <div class="stat-box-value val-yellow">{{ stats.category_count }}</div>
+            <div class="stat-box-label">Topic Categories</div>
+        </div>
+    </div>
 
-    <div class="key-points">
-        {% for point in key_points %}
-        <div class="key-point">
-            <div class="point-icon">
-                {% if loop.index == 1 %}▸{% elif loop.index == 2 %}◆{% else %}◉{% endif %}
+    {# Horizontal bar chart per category #}
+    <div class="breakdown-title">Topic Breakdown</div>
+    <div class="breakdown-rows">
+        {% for cat in categories %}
+        <div class="breakdown-row">
+            <div class="breakdown-cat">{{ cat.name }}</div>
+            <div class="breakdown-bar-wrap">
+                <div class="breakdown-bar-fill" style="width: {{ cat.pct }}%; background: {{ cat.color }};"></div>
             </div>
-            <div class="point-text">{{ point }}</div>
+            <div class="breakdown-count">{{ cat.count }} stor{{ 'y' if cat.count == 1 else 'ies' }}</div>
         </div>
         {% endfor %}
     </div>
 
-    <div class="story-footer">
-        <div class="credibility-badge">✓ VERIFIED {{ credibility }}</div>
-        <div class="brand-tag">AI Weekly Intelligence</div>
+    <div class="slide-footer" style="margin-top: 28px;">
+        <div class="footer-left">✓ AI-ANALYZED &amp; HUMAN-VERIFIED</div>
+        <div class="footer-right">AI Weekly Intelligence</div>
     </div>
 </div>
 
-{# ─── CLOSING SLIDE ─── #}
+
+{# ══════════════════════════════════════════════════════════
+   STORY SLIDE
+══════════════════════════════════════════════════════════ #}
+{% elif slide_type == "story" %}
+<div class="slide story">
+
+    {# Top bar: category + progress dots + counter #}
+    <div class="story-topbar">
+        <div class="chip chip-solid">{{ category }}</div>
+        <div style="display:flex; align-items:center; gap:14px;">
+            <div class="progress-dots">
+                {% for i in range([total_slides, 7]|min) %}
+                <div class="progress-dot {{ 'done' if i < slide_num else '' }}"></div>
+                {% endfor %}
+            </div>
+            <div style="font-size:15px; color:rgba(255,255,255,0.3); font-weight:700; letter-spacing:2px;">
+                {{ slide_num }}/{{ total_slides }}
+            </div>
+        </div>
+    </div>
+
+    {# Headline #}
+    <div class="story-headline">{{ headline }}</div>
+    <div class="divider"></div>
+
+    {# Two-column content #}
+    <div class="story-content">
+
+        {# LEFT — bullet points #}
+        <div class="key-points">
+            {% for point in key_points %}
+            <div class="key-point">
+                <div class="point-icon">
+                    {% if loop.index == 1 %}▸{% elif loop.index == 2 %}◆{% else %}◉{% endif %}
+                </div>
+                <div class="point-text">{{ point }}</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# RIGHT — key stat + credibility + sources #}
+        <div class="story-right">
+
+            {# Key stat callout #}
+            {% if key_stat %}
+            <div class="stat-callout">
+                <div class="stat-callout-label">Key Stat</div>
+                <div class="stat-callout-value">{{ key_stat.value }}</div>
+                <div class="stat-callout-context">{{ key_stat.label }}</div>
+            </div>
+            {% else %}
+            <div class="stat-callout empty">
+                <div class="stat-callout-label">Credibility</div>
+                <div class="stat-callout-value">{{ credibility }}</div>
+                <div class="stat-callout-context">verified score</div>
+            </div>
+            {% endif %}
+
+            {# Credibility fill bar #}
+            <div class="cred-section">
+                <div class="cred-header">
+                    <span class="cred-label">Credibility</span>
+                    <span class="cred-value">{{ credibility }}</span>
+                </div>
+                <div class="bar-track">
+                    <div class="bar-fill green" style="width: {{ cred_pct }}%;"></div>
+                </div>
+            </div>
+
+            {# Source count dots (max 5 shown) #}
+            <div class="source-section">
+                <div class="source-header">
+                    <span class="cred-label">Sources</span>
+                    <span class="cred-value">{{ source_count }} verified</span>
+                </div>
+                <div class="source-dots">
+                    {% for i in range(5) %}
+                    <div class="source-dot {{ 'active' if i < [source_count, 5]|min else '' }}"></div>
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="slide-footer">
+        <div class="footer-left">✓ VERIFIED {{ credibility }}</div>
+        <div class="footer-right">AI Weekly Intelligence</div>
+    </div>
+</div>
+
+
+{# ══════════════════════════════════════════════════════════
+   CLOSING SLIDE
+══════════════════════════════════════════════════════════ #}
 {% elif slide_type == "closing" %}
 <div class="slide closing">
     <div class="closing-icon">💡</div>
     <div class="closing-question">Which story surprised<br>you the most?</div>
-    <div class="closing-cta">
+    <div class="closing-sub">
         Drop your answer in the comments — I read every reply.<br>
-        Links to full articles are pinned in the comments below.
+        Full article links are pinned in the first comment.
     </div>
     <div class="closing-follow">
         <span style="font-size:22px">🔔</span>
-        <span class="follow-text">Follow for weekly AI intelligence briefs</span>
+        <span class="closing-follow-text">Follow for weekly AI intelligence briefs</span>
     </div>
-    <div class="closing-note">Every Tuesday · curated by AI · verified by humans</div>
+    <div class="closing-note">Every week · curated by AI · verified by humans</div>
 </div>
 {% endif %}
 

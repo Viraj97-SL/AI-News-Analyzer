@@ -3,14 +3,19 @@ Image generation node — news cards + LinkedIn carousel PDF via html2image.
 
 Produces:
   - 1200x627px individual news cards (used in email newsletter)
-  - 1080x1080px carousel slides combined into a PDF (used for LinkedIn document post)
+  - 1080x1080px carousel slides combined into a PDF (LinkedIn document post)
 
-Both use HTML/CSS templates rendered through headless Chrome. Zero API cost.
+Carousel slide order:
+  1. Cover  — story count + category breakdown chips
+  2. Snapshot — "Week in Numbers" infographic (4 stat boxes + bar chart)
+  3. Story × N — headline + bullet points + key stat callout + credibility bar
+  4. Closing — CTA + follow prompt
 """
 
 from __future__ import annotations
 
 import re
+from collections import Counter
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -29,6 +34,53 @@ settings = get_settings()
 OUTPUT_DIR = Path("./output/images")
 TEMPLATE_DIR = Path(__file__).parent.parent.parent / "templates"
 
+# Color palette for categories (matches template CSS vars)
+CATEGORY_COLORS: dict[str, str] = {
+    "LLM":             "#00f3ff",
+    "Computer Vision": "#ffe600",
+    "Robotics":        "#ff2d78",
+    "AI Policy":       "#ff6b35",
+    "AI Startup":      "#00ff9d",
+    "Research":        "#9d00ff",
+    "Industry":        "#7ec8ff",
+    "Other":           "#888888",
+}
+
+# Patterns to extract a key stat/number from a body string.
+# Listed in priority order — first match wins.
+_STAT_PATTERNS: list[tuple[str, str]] = [
+    # Dollar amounts:  $4.6 billion,  $200M,  $1.2T
+    (r"\$[\d.,]+\s*(?:billion|trillion|million|B|M|T)\b", "funding / valuation"),
+    # Percentages:  94.2%,  38%
+    (r"\b\d+(?:\.\d+)?\s*%", "improvement / accuracy"),
+    # Multipliers:  3× faster,  10x better
+    (r"\b\d+(?:\.\d+)?\s*[x×]\s*(?:faster|better|more|improvement|speedup)\b", "speedup"),
+    # AI parameter counts:  70B parameters,  405B tokens
+    (r"\b\d+(?:\.\d+)?[BM]\b(?=\s*(?:param|token|model))", "parameters"),
+    # Benchmark scores with numbers:  top 3,  #1
+    (r"(?:top|#)\s*\d+\b", "ranking"),
+    # Large plain numbers:  42 billion,  200 million
+    (r"\b\d+(?:\.\d+)?\s*(?:billion|million)\b", "scale"),
+]
+
+
+def _extract_key_stat(body: str) -> dict | None:
+    """
+    Find the most prominent number/statistic in a summary body.
+
+    Returns a dict with 'value' (the raw matched string, trimmed) and
+    'label' (2–4 words of surrounding context), or None if nothing found.
+    """
+    for pattern, fallback_label in _STAT_PATTERNS:
+        m = re.search(pattern, body, re.IGNORECASE)
+        if m:
+            # Build a short label from the words that follow the match
+            after = body[m.end():].strip()
+            label_words = after.split()[:4]
+            label = " ".join(label_words).rstrip(".,;:") or fallback_label
+            return {"value": m.group(0).strip(), "label": label}
+    return None
+
 
 def _extract_key_points(body: str) -> list[str]:
     """Split a summary body into 2–3 readable bullet points."""
@@ -36,8 +88,40 @@ def _extract_key_points(body: str) -> list[str]:
     return [s for s in sentences if len(s) > 15][:3]
 
 
+def _build_category_breakdown(summaries: list[dict]) -> list[dict]:
+    """Count stories per category, return sorted list with colour + percentage."""
+    counts = Counter(s.get("category", "Other") for s in summaries)
+    total = len(summaries)
+    return [
+        {
+            "name": cat,
+            "count": count,
+            "pct": round(count / total * 100) if total else 0,
+            "color": CATEGORY_COLORS.get(cat, CATEGORY_COLORS["Other"]),
+        }
+        for cat, count in counts.most_common()
+    ]
+
+
+def _build_week_stats(summaries: list[dict]) -> dict:
+    """Aggregate key numbers shown on the 'Week in Numbers' snapshot slide."""
+    all_sources: set[str] = set()
+    for s in summaries:
+        all_sources.update(s.get("source_urls", []))
+
+    scores = [s.get("credibility_score", 0.0) for s in summaries]
+    avg_cred = sum(scores) / len(scores) if scores else 0.0
+    categories = {s.get("category", "Other") for s in summaries}
+
+    return {
+        "story_count": len(summaries),
+        "source_count": len(all_sources) or sum(len(s.get("source_urls", [])) for s in summaries),
+        "avg_credibility": f"{avg_cred:.0%}",
+        "category_count": len(categories),
+    }
+
+
 def _make_hti(size: tuple[int, int]):
-    """Create an Html2Image instance for the given canvas size."""
     from html2image import Html2Image
 
     return Html2Image(
@@ -47,8 +131,12 @@ def _make_hti(size: tuple[int, int]):
     )
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Email cards (1200 × 627)
+# ──────────────────────────────────────────────────────────────────────────────
+
 def _generate_cards(summaries: list[dict], run_id: str, env: Environment) -> list[str]:
-    """Render individual 1200×627 news cards (for email attachments)."""
+    """Render individual 1200×627 news cards for email attachments."""
     template = env.get_template("news_card.html")
     hti = _make_hti((1200, 627))
     paths: list[str] = []
@@ -69,12 +157,19 @@ def _generate_cards(summaries: list[dict], run_id: str, env: Environment) -> lis
     return paths
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# LinkedIn carousel (1080 × 1080 slides → PDF)
+# ──────────────────────────────────────────────────────────────────────────────
+
 def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment) -> str | None:
     """
-    Render 1080×1080 carousel slides and combine them into a single PDF.
+    Render infographic carousel slides and combine into a single PDF.
 
-    Slide order: cover → one story per summary → closing CTA.
-    Returns the path to the PDF, or None on failure.
+    Slide order:
+      1  Cover          — story count + category breakdown chips
+      2  Snapshot       — "Week in Numbers" 4-box infographic + bar chart
+      3… Story slides   — headline, bullets, key stat callout, credibility bar
+      N  Closing        — CTA + follow prompt
     """
     try:
         from PIL import Image
@@ -88,41 +183,60 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
     story_summaries = summaries[:7]
     total_slides = len(story_summaries)
     date_str = date.today().strftime("%B %d, %Y")
+    categories = _build_category_breakdown(story_summaries)
+    stats = _build_week_stats(story_summaries)
     slide_pngs: list[str] = []
 
-    # ── Cover slide ──────────────────────────────────────
-    cover_html = template.render(
+    # ── 1. Cover slide ────────────────────────────────────────
+    html = template.render(
         slide_type="cover",
         story_count=total_slides,
         date_str=date_str,
+        categories=categories,
     )
-    cover_name = f"carousel_{run_id}_cover.png"
-    hti.screenshot(html_str=cover_html, save_as=cover_name)
-    slide_pngs.append(str(OUTPUT_DIR / cover_name))
+    name = f"carousel_{run_id}_cover.png"
+    hti.screenshot(html_str=html, save_as=name)
+    slide_pngs.append(str(OUTPUT_DIR / name))
 
-    # ── One story slide per summary ──────────────────────
+    # ── 2. Snapshot "Week in Numbers" slide ───────────────────
+    html = template.render(
+        slide_type="snapshot",
+        stats=stats,
+        categories=categories,
+    )
+    name = f"carousel_{run_id}_snapshot.png"
+    hti.screenshot(html_str=html, save_as=name)
+    slide_pngs.append(str(OUTPUT_DIR / name))
+
+    # ── 3. One story slide per summary ────────────────────────
     for i, summary in enumerate(story_summaries):
-        key_points = _extract_key_points(summary.get("body", ""))
-        story_html = template.render(
+        body = summary.get("body", "")
+        cred_score = summary.get("credibility_score", 0.0)
+        source_urls = summary.get("source_urls", [])
+
+        html = template.render(
             slide_type="story",
             slide_num=i + 1,
             total_slides=total_slides,
             headline=summary.get("headline", ""),
-            key_points=key_points,
+            key_points=_extract_key_points(body),
+            key_stat=_extract_key_stat(body),
             category=summary.get("category", "AI"),
-            credibility=f"{summary.get('credibility_score', 0):.0%}",
+            credibility=f"{cred_score:.0%}",
+            cred_pct=round(cred_score * 100),
+            source_count=len(source_urls),
         )
         name = f"carousel_{run_id}_{i}.png"
-        hti.screenshot(html_str=story_html, save_as=name)
+        hti.screenshot(html_str=html, save_as=name)
         slide_pngs.append(str(OUTPUT_DIR / name))
 
-    # ── Closing / CTA slide ──────────────────────────────
-    close_html = template.render(slide_type="closing")
-    close_name = f"carousel_{run_id}_close.png"
-    hti.screenshot(html_str=close_html, save_as=close_name)
-    slide_pngs.append(str(OUTPUT_DIR / close_name))
+    # ── 4. Closing / CTA slide ────────────────────────────────
+    html = template.render(slide_type="closing")
+    name = f"carousel_{run_id}_close.png"
+    hti.screenshot(html_str=html, save_as=name)
+    slide_pngs.append(str(OUTPUT_DIR / name))
 
-    # ── Combine PNGs → PDF ───────────────────────────────
+    # ── Combine PNGs → PDF ────────────────────────────────────
     pdf_path = str(OUTPUT_DIR / f"carousel_{run_id}.pdf")
     images = [Image.open(p).convert("RGB") for p in slide_pngs]
     images[0].save(pdf_path, save_all=True, append_images=images[1:])
@@ -131,8 +245,12 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
     return pdf_path
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# LangGraph node
+# ──────────────────────────────────────────────────────────────────────────────
+
 def image_gen_node(state: PipelineState) -> dict:
-    """Generate news card images (email) and a carousel PDF (LinkedIn)."""
+    """Generate email cards and a LinkedIn carousel PDF from pipeline summaries."""
     summaries = state.get("summaries", [])
     if not summaries:
         logger.info("image_gen_skipped", reason="no summaries available")
@@ -148,11 +266,9 @@ def image_gen_node(state: PipelineState) -> dict:
 
         run_id = state.get("run_id", "dev")
 
-        # Individual cards for email
         image_paths = _generate_cards(summaries, run_id, env)
         logger.info("news_cards_generated", count=len(image_paths))
 
-        # Carousel PDF for LinkedIn
         carousel_pdf = _generate_carousel_pdf(summaries, run_id, env)
 
         result: dict = {"image_paths": image_paths, "current_step": "images_generated"}
