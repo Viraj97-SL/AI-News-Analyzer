@@ -9,6 +9,8 @@ Handles:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import httpx
 
 from app.core.config import get_settings
@@ -127,6 +129,85 @@ class LinkedInService:
         post_id = resp.headers.get("x-restli-id", "unknown")
         logger.info("linkedin_image_post_published", post_id=post_id)
         return {"post_id": post_id, "image_urn": image_urn, "status": "published"}
+
+    def upload_document(self, pdf_path: str) -> str:
+        """
+        Upload a PDF document and return its URN.
+
+        LinkedIn displays multi-page PDFs as swipeable carousel posts.
+        Uses the /rest/documents endpoint (same version header pattern as images).
+        """
+        file_size = Path(pdf_path).stat().st_size
+
+        init_payload = {
+            "initializeUploadRequest": {
+                "owner": self.person_urn,
+                "fileSizeBytes": file_size,
+                "uploadedByMember": self.person_urn,
+            }
+        }
+
+        with httpx.Client(timeout=120) as client:
+            init_resp = client.post(
+                f"{LINKEDIN_API_BASE}/rest/documents?action=initializeUpload",
+                headers=self._headers,
+                json=init_payload,
+            )
+            init_resp.raise_for_status()
+            init_data = init_resp.json()["value"]
+
+            upload_url = init_data["uploadUrl"]
+            document_urn = init_data["document"]
+
+            with open(pdf_path, "rb") as f:
+                upload_resp = client.put(
+                    upload_url,
+                    headers={"Authorization": f"Bearer {self.access_token}"},
+                    content=f.read(),
+                )
+                upload_resp.raise_for_status()
+
+        logger.info("linkedin_document_uploaded", document_urn=document_urn, size_bytes=file_size)
+        return document_urn
+
+    def publish_document_post(self, text: str, pdf_path: str, title: str = "AI/ML Weekly Digest") -> dict:
+        """
+        Publish a PDF as a LinkedIn carousel (document post).
+
+        LinkedIn renders each PDF page as a swipeable carousel slide.
+        This format receives significantly higher organic reach than single images.
+        """
+        document_urn = self.upload_document(pdf_path)
+
+        payload = {
+            "author": self.person_urn,
+            "commentary": text,
+            "visibility": "PUBLIC",
+            "distribution": {
+                "feedDistribution": "MAIN_FEED",
+                "targetEntities": [],
+                "thirdPartyDistributionChannels": [],
+            },
+            "content": {
+                "media": {
+                    "title": title,
+                    "id": document_urn,
+                }
+            },
+            "lifecycleState": "PUBLISHED",
+        }
+
+        with httpx.Client(timeout=30) as client:
+            resp = client.post(
+                f"{LINKEDIN_API_BASE}/rest/posts",
+                headers=self._headers,
+                json=payload,
+            )
+            resp.raise_for_status()
+
+        post_id = resp.headers.get("x-restli-id", "unknown")
+        logger.info("linkedin_carousel_published", post_id=post_id, document_urn=document_urn)
+        return {"post_id": post_id, "document_urn": document_urn, "status": "published"}
 
     # TODO: Implement token refresh using requests-oauthlib
     # Access tokens expire in 60 days, refresh tokens in 365 days

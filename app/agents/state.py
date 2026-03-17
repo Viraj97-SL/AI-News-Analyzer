@@ -46,6 +46,7 @@ class PipelineState(TypedDict):
     newsletter_html: str
     linkedin_draft: str
     image_paths: list[str]
+    carousel_pdf_path: NotRequired[str]  # LinkedIn carousel PDF (multi-slide document post)
 
     # ── Human-in-the-loop ───────────────────────────────────
     approval_status: Literal["pending", "approved", "rejected"]

@@ -164,20 +164,25 @@ def _build_newsletter_html(summaries: list, run_id: str) -> str:
 
 
 def _publish_node(state: PipelineState) -> dict:
-    """Send email newsletter and publish LinkedIn post."""
+    """Send email newsletter and publish LinkedIn carousel + post."""
     from app.services.email_service import EmailService
+    from app.services.linkedin_service import LinkedInService
 
     run_id = state["run_id"]
     summaries = state.get("summaries", [])
     image_paths = state.get("image_paths", [])
+    linkedin_draft = state.get("linkedin_draft", "")
+    carousel_pdf = state.get("carousel_pdf_path")
 
     logger.info(
         "publishing",
         run_id=run_id,
         summaries=len(summaries),
-        linkedin_chars=len(state.get("linkedin_draft", "")),
+        linkedin_chars=len(linkedin_draft),
+        has_carousel=bool(carousel_pdf),
     )
 
+    # ── Email newsletter ──────────────────────────────────────────────────────
     html = _build_newsletter_html(summaries, run_id)
     try:
         EmailService().send_newsletter(
@@ -187,6 +192,28 @@ def _publish_node(state: PipelineState) -> dict:
         logger.info("newsletter_sent", run_id=run_id)
     except Exception as e:
         logger.error("newsletter_send_failed", run_id=run_id, error=str(e))
+
+    # ── LinkedIn publishing ───────────────────────────────────────────────────
+    if linkedin_draft:
+        try:
+            li = LinkedInService()
+            if carousel_pdf:
+                # Preferred: publish as a swipeable PDF carousel (higher reach)
+                li.publish_document_post(
+                    text=linkedin_draft,
+                    pdf_path=carousel_pdf,
+                    title="AI/ML Weekly Intelligence Brief",
+                )
+                logger.info("linkedin_carousel_post_done", run_id=run_id)
+            elif image_paths:
+                # Fallback: single image post
+                li.publish_image_post(text=linkedin_draft, image_path=image_paths[0])
+                logger.info("linkedin_image_post_done", run_id=run_id)
+            else:
+                li.publish_text_post(text=linkedin_draft)
+                logger.info("linkedin_text_post_done", run_id=run_id)
+        except Exception as e:
+            logger.error("linkedin_publish_failed", run_id=run_id, error=str(e))
 
     return {"current_step": "published"}
 

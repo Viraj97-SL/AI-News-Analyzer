@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Carousel Slide</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+
+        :root {
+            --neon-blue: #00f3ff;
+            --neon-purple: #9d00ff;
+            --neon-green: #00ff9d;
+            --dark-bg: #05050a;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            width: 1080px;
+            height: 1080px;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--dark-bg);
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Subtle grid overlay */
+        body::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: 0;
+        }
+
+        .slide {
+            position: relative;
+            width: 1080px;
+            height: 1080px;
+            z-index: 1;
+            padding: 64px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ───────────────────────────────
+           COVER SLIDE
+        ─────────────────────────────── */
+        .cover {
+            background:
+                radial-gradient(circle at 20% 30%, rgba(157,0,255,0.55) 0%, transparent 50%),
+                radial-gradient(circle at 80% 75%, rgba(0,243,255,0.4) 0%, transparent 50%),
+                var(--dark-bg);
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            gap: 28px;
+        }
+
+        .cover-label {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            color: var(--neon-blue);
+            border: 1px solid rgba(0,243,255,0.5);
+            padding: 10px 28px;
+            border-radius: 30px;
+        }
+
+        .cover-count {
+            font-size: 130px;
+            font-weight: 900;
+            line-height: 1;
+            background: linear-gradient(135deg, var(--neon-purple), var(--neon-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .cover-title {
+            font-size: 58px;
+            font-weight: 900;
+            line-height: 1.15;
+            background: linear-gradient(to right, #fff 40%, #b0c8ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .cover-subtitle {
+            font-size: 22px;
+            color: rgba(255,255,255,0.55);
+            line-height: 1.5;
+        }
+
+        .cover-date {
+            font-size: 14px;
+            color: rgba(255,255,255,0.35);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-top: 8px;
+        }
+
+        .swipe-hint {
+            position: absolute;
+            bottom: 56px;
+            right: 64px;
+            font-size: 16px;
+            color: rgba(255,255,255,0.45);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            letter-spacing: 1px;
+        }
+
+        .swipe-arrow {
+            font-size: 22px;
+            color: var(--neon-blue);
+        }
+
+        /* ───────────────────────────────
+           STORY SLIDE
+        ─────────────────────────────── */
+        .story {
+            background:
+                radial-gradient(circle at 88% 12%, rgba(157,0,255,0.3) 0%, transparent 45%),
+                radial-gradient(circle at 12% 88%, rgba(0,243,255,0.2) 0%, transparent 45%),
+                var(--dark-bg);
+        }
+
+        .story-topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 44px;
+        }
+
+        .category-badge {
+            background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple));
+            color: #fff;
+            padding: 10px 26px;
+            border-radius: 30px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-size: 14px;
+            box-shadow: 0 0 20px rgba(0,243,255,0.35);
+        }
+
+        .slide-counter {
+            font-size: 16px;
+            color: rgba(255,255,255,0.35);
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+
+        .slide-counter .current {
+            color: var(--neon-blue);
+            font-size: 22px;
+        }
+
+        .story-headline {
+            font-size: 46px;
+            font-weight: 900;
+            line-height: 1.2;
+            background: linear-gradient(to right, #ffffff, #c8d8ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 30px;
+        }
+
+        .divider {
+            height: 2px;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple), transparent);
+            margin-bottom: 36px;
+            border-radius: 1px;
+            flex-shrink: 0;
+        }
+
+        .key-points {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            flex-grow: 1;
+        }
+
+        .key-point {
+            display: flex;
+            align-items: flex-start;
+            gap: 18px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-left: 3px solid var(--neon-blue);
+            border-radius: 0 14px 14px 0;
+            padding: 18px 22px;
+        }
+
+        .point-icon {
+            font-size: 18px;
+            flex-shrink: 0;
+            margin-top: 4px;
+            color: var(--neon-blue);
+        }
+
+        .point-text {
+            font-size: 20px;
+            line-height: 1.55;
+            color: rgba(255,255,255,0.82);
+        }
+
+        .story-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 28px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.07);
+        }
+
+        .credibility-badge {
+            font-size: 13px;
+            color: var(--neon-green);
+            font-weight: 700;
+            letter-spacing: 1px;
+            border: 1px solid rgba(0,255,157,0.35);
+            padding: 7px 16px;
+            border-radius: 20px;
+        }
+
+        .brand-tag {
+            font-size: 13px;
+            color: rgba(255,255,255,0.25);
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        /* ───────────────────────────────
+           CLOSING SLIDE
+        ─────────────────────────────── */
+        .closing {
+            background:
+                radial-gradient(circle at 50% 40%, rgba(157,0,255,0.45) 0%, transparent 55%),
+                radial-gradient(circle at 80% 85%, rgba(0,243,255,0.3) 0%, transparent 50%),
+                var(--dark-bg);
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            gap: 30px;
+        }
+
+        .closing-icon {
+            font-size: 80px;
+            line-height: 1;
+        }
+
+        .closing-question {
+            font-size: 40px;
+            font-weight: 900;
+            line-height: 1.3;
+            background: linear-gradient(135deg, #fff 0%, var(--neon-blue) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            max-width: 860px;
+        }
+
+        .closing-cta {
+            font-size: 20px;
+            color: rgba(255,255,255,0.55);
+            line-height: 1.6;
+        }
+
+        .closing-follow {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(0,243,255,0.3);
+            border-radius: 50px;
+            padding: 18px 40px;
+        }
+
+        .follow-text {
+            font-size: 19px;
+            color: #fff;
+            font-weight: 700;
+        }
+
+        .closing-note {
+            font-size: 15px;
+            color: rgba(255,255,255,0.28);
+            margin-top: -8px;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body>
+
+{# ─── COVER SLIDE ─── #}
+{% if slide_type == "cover" %}
+<div class="slide cover">
+    <div class="cover-label">Weekly AI Intelligence Brief</div>
+    <div class="cover-count">{{ story_count }}</div>
+    <div class="cover-title">AI Stories That<br>Matter This Week</div>
+    <div class="cover-subtitle">Curated, verified &amp; ranked by importance<br>for engineers and researchers</div>
+    <div class="cover-date">{{ date_str }}</div>
+    <div class="swipe-hint">
+        Swipe to explore <span class="swipe-arrow">→</span>
+    </div>
+</div>
+
+{# ─── STORY SLIDE ─── #}
+{% elif slide_type == "story" %}
+<div class="slide story">
+    <div class="story-topbar">
+        <div class="category-badge">{{ category }}</div>
+        <div class="slide-counter"><span class="current">{{ slide_num }}</span> / {{ total_slides }}</div>
+    </div>
+
+    <div class="story-headline">{{ headline }}</div>
+    <div class="divider"></div>
+
+    <div class="key-points">
+        {% for point in key_points %}
+        <div class="key-point">
+            <div class="point-icon">
+                {% if loop.index == 1 %}▸{% elif loop.index == 2 %}◆{% else %}◉{% endif %}
+            </div>
+            <div class="point-text">{{ point }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="story-footer">
+        <div class="credibility-badge">✓ VERIFIED {{ credibility }}</div>
+        <div class="brand-tag">AI Weekly Intelligence</div>
+    </div>
+</div>
+
+{# ─── CLOSING SLIDE ─── #}
+{% elif slide_type == "closing" %}
+<div class="slide closing">
+    <div class="closing-icon">💡</div>
+    <div class="closing-question">Which story surprised<br>you the most?</div>
+    <div class="closing-cta">
+        Drop your answer in the comments — I read every reply.<br>
+        Links to full articles are pinned in the comments below.
+    </div>
+    <div class="closing-follow">
+        <span style="font-size:22px">🔔</span>
+        <span class="follow-text">Follow for weekly AI intelligence briefs</span>
+    </div>
+    <div class="closing-note">Every Tuesday · curated by AI · verified by humans</div>
+</div>
+{% endif %}
+
+</body>
+</html>
