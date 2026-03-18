@@ -444,11 +444,17 @@ def _publish_research_node(state: PipelineState) -> dict:
     )
 
     # ── Email newsletter ──────────────────────────────────────────────────
+    # Include carousel slides in the newsletter alongside the cards
+    research_slides = state.get("research_carousel_slide_paths") or []
+    newsletter_attachments = image_paths + [
+        p for p in research_slides if Path(p).exists()
+    ] or None
+
     try:
         EmailService().send_newsletter(
             html_content=state.get("newsletter_html", ""),
             subject="🔬 AI Research Analyst: Deep Dive",
-            image_paths=image_paths or None,
+            image_paths=newsletter_attachments,
         )
         logger.info("research_newsletter_sent", run_id=run_id)
     except Exception as e:

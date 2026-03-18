@@ -48,24 +48,27 @@ def human_approval_node(state: PipelineState) -> Command[Literal["publish", "rev
         approve_url = f"{base}/api/v1/approvals/via-token?token={approve_token}"
         reject_url = f"{base}/api/v1/approvals/via-token?token={reject_token}"
 
-        # Prefer carousel slides (new infographic format) for preview.
-        # For research pipeline: use research carousel slides if available.
-        # For news pipeline: use carousel_slide_paths. Fall back to image_paths.
-        preview_paths = (
-            state.get("research_carousel_slide_paths")
-            or state.get("carousel_slide_paths")
-            or state.get("image_paths", [])
-        )
-        # Send first 4 slides for inline preview
-        preview_paths = [p for p in preview_paths[:4] if __import__("pathlib").Path(p).exists()]
+        _Path = __import__("pathlib").Path
 
-        # Attach the relevant PDF so reviewer can see all slides
-        attachments = list(preview_paths)
+        # Combine ALL generated images so nothing is lost in the approval preview:
+        #   1. Research/news cards (research_card, prior_art_card, news cards)
+        #   2. Carousel slides (research or news)
+        # Each group is checked individually so the or-chain can't silently drop one.
+        card_paths    = state.get("image_paths", [])
+        research_slides = state.get("research_carousel_slide_paths") or []
+        news_slides     = state.get("carousel_slide_paths") or []
+        slide_paths = research_slides or news_slides  # prefer research, fall back to news
+
+        # Cards first (most informative for approval), then first 2 slides as bonus preview
+        combined = card_paths + list(slide_paths)[:2]
+        attachments = [p for p in combined if _Path(p).exists()]
+
+        # Always attach the full carousel PDF so reviewer can swipe all slides
         carousel_pdf = (
             state.get("research_carousel_pdf_path")
             or state.get("carousel_pdf_path", "")
         )
-        if carousel_pdf and __import__("pathlib").Path(carousel_pdf).exists():
+        if carousel_pdf and _Path(carousel_pdf).exists():
             attachments.append(carousel_pdf)
 
         EmailService().send_approval_email(
