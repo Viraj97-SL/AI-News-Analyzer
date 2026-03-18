@@ -122,26 +122,26 @@ def benchmark_chart_node(state: "PipelineState") -> dict:
                 fontfamily="monospace", fontweight="bold",
             )
 
-        # Styling
+        # Styling — matplotlib uses (R,G,B,A) tuples, not CSS rgba()
         ax.set_yticks(y_pos)
         ax.set_yticklabels(labels, fontsize=9, color="#ccccdd", fontfamily="monospace")
         ax.tick_params(colors="white", length=0)
         for spine in ax.spines.values():
-            spine.set_edgecolor("rgba(0, 243, 255, 0.2)")
-        ax.tick_params(axis="x", colors="rgba(255,255,255,0.4)", labelsize=8)
-        ax.set_xlabel("Score", color="rgba(255,255,255,0.4)", fontfamily="monospace", fontsize=9)
+            spine.set_edgecolor((0.0, 0.95, 1.0, 0.2))
+        ax.tick_params(axis="x", colors=(1.0, 1.0, 1.0, 0.4), labelsize=8)
+        ax.set_xlabel("Score", color=(1.0, 1.0, 1.0, 0.4), fontfamily="monospace", fontsize=9)
         ax.set_title(
             "Benchmark Comparison",
             color="#00f3ff", fontfamily="monospace", fontsize=11, pad=10, fontweight="bold",
         )
-        ax.grid(axis="x", color="rgba(0, 243, 255, 0.1)", linewidth=0.5, zorder=0)
+        ax.grid(axis="x", color=(0.0, 0.95, 1.0, 0.1), linewidth=0.5, zorder=0)
 
         if has_sota:
             cyan_p = mpatches.Patch(color="#00f3ff", label="This Paper")
             gray_p = mpatches.Patch(color="#445566", label="Prior SOTA")
             ax.legend(
                 handles=[cyan_p, gray_p],
-                facecolor="#0a0a14", edgecolor="rgba(0,243,255,0.3)",
+                facecolor="#0a0a14", edgecolor=(0.0, 0.95, 1.0, 0.3),
                 labelcolor="white", fontsize=8, prop={"family": "monospace"},
             )
 
