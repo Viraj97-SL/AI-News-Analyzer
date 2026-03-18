@@ -62,3 +62,17 @@ class PipelineState(TypedDict):
     # ── Research Analyst Variables ──────────────────────────
     chosen_research_paper: NotRequired[dict]
     deep_analysis: NotRequired[dict]
+
+    # ── Research Analyst Enhancements ───────────────────────
+    research_scores: NotRequired[dict]                     # F8: novelty/clarity/benchmarks/reproducibility 1-10
+    hook_score: NotRequired[dict]                          # F1: hook quality scores
+    hook_attempts: NotRequired[int]                        # F1: regeneration counter
+    benchmark_metrics: NotRequired[list[dict]]             # F5: extracted benchmark data
+    benchmark_chart_path: NotRequired[str]                 # F5: matplotlib bar chart PNG path
+    architecture_diagram_path: NotRequired[str]            # F6: cropped PDF figure path or ""
+    architecture_diagram_b64: NotRequired[str]             # F6: base64-encoded diagram
+    architecture_fallback_text: NotRequired[str]           # F6: ASCII box diagram HTML
+    prior_art_comparison: NotRequired[dict]                # F7: vs-prior-SOTA structured comparison
+    comparison_card_path: NotRequired[str]                 # F7: prior art card PNG path
+    research_carousel_pdf_path: NotRequired[str]           # F2: 5-slide carousel PDF
+    research_carousel_slide_paths: NotRequired[list[str]]  # F2: individual 1080x1080 PNGs

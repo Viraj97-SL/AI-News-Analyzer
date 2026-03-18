@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Research Carousel</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Inter:wght@400;600;700;900&display=swap');
+
+        :root {
+            --blue:   #00f3ff;
+            --purple: #9d00ff;
+            --green:  #00ff9d;
+            --pink:   #ff2d78;
+            --bg:     #030305;
+            --card:   rgba(10, 10, 22, 0.9);
+            --line:   rgba(0, 243, 255, 0.08);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            width: 1080px;
+            height: 1080px;
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            overflow: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(var(--line) 1px, transparent 1px),
+                linear-gradient(90deg, var(--line) 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: 0;
+        }
+
+        /* Glow orbs */
+        body::after {
+            content: "";
+            position: absolute;
+            width: 500px; height: 500px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(157,0,255,0.08) 0%, transparent 70%);
+            top: -100px; right: -100px;
+            z-index: 0;
+        }
+
+        .slide {
+            position: relative;
+            z-index: 1;
+            width: 1080px;
+            height: 1080px;
+            padding: 64px 72px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* ── Shared Header ─────────────────────── */
+        .sys-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--blue);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            opacity: 0.7;
+            margin-bottom: 10px;
+        }
+
+        /* ── Slide Number Dot ──────────────────── */
+        .slide-indicator {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+        }
+        .dot.active { background: var(--blue); box-shadow: 0 0 8px var(--blue); }
+
+        /* ── Section label ─────────────────────── */
+        .section-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 28px;
+        }
+
+        /* ── Body text ─────────────────────────── */
+        .body-text {
+            font-size: 28px;
+            font-weight: 400;
+            line-height: 1.65;
+            color: rgba(255,255,255,0.88);
+            flex-grow: 1;
+        }
+
+        /* ── Callout box ───────────────────────── */
+        .callout {
+            background: rgba(0, 243, 255, 0.06);
+            border: 1px solid rgba(0, 243, 255, 0.2);
+            border-left: 4px solid var(--blue);
+            border-radius: 8px;
+            padding: 20px 24px;
+            font-size: 22px;
+            color: rgba(255,255,255,0.85);
+            line-height: 1.6;
+        }
+
+        /* ── Footer ────────────────────────────── */
+        .footer {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: rgba(255,255,255,0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            padding-top: 16px;
+        }
+
+        /* ══════════════════════════════════════
+           TITLE SLIDE
+        ══════════════════════════════════════ */
+        .title-slide .big-title {
+            font-size: 46px;
+            font-weight: 900;
+            line-height: 1.2;
+            color: #ffffff;
+            text-shadow: 0 0 30px rgba(255,255,255,0.2);
+            margin-bottom: 36px;
+            display: -webkit-box;
+            -webkit-line-clamp: 4;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .title-slide .hook-text {
+            font-size: 26px;
+            font-weight: 600;
+            line-height: 1.55;
+            color: var(--blue);
+            background: rgba(0,243,255,0.06);
+            border-left: 4px solid var(--blue);
+            padding: 16px 20px;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .title-slide .arxiv-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(157,0,255,0.12);
+            border: 1px solid var(--purple);
+            color: #d4a0ff;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            padding: 6px 14px;
+            border-radius: 4px;
+            margin-bottom: 24px;
+        }
+
+        /* ══════════════════════════════════════
+           PROBLEM / METHODOLOGY / BENCHMARKS
+        ══════════════════════════════════════ */
+        .content-slide .large-label {
+            font-size: 56px;
+            font-weight: 900;
+            line-height: 1;
+            margin-bottom: 32px;
+        }
+
+        /* ══════════════════════════════════════
+           TAKEAWAYS SLIDE
+        ══════════════════════════════════════ */
+        .cta-box {
+            background: linear-gradient(135deg, rgba(0,243,255,0.08), rgba(157,0,255,0.08));
+            border: 1px solid rgba(0,243,255,0.25);
+            border-radius: 12px;
+            padding: 28px 32px;
+            text-align: center;
+        }
+
+        .cta-box .cta-main {
+            font-size: 28px;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 12px;
+        }
+
+        .cta-box .cta-sub {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            color: var(--blue);
+            letter-spacing: 1px;
+        }
+
+        .url-chip {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--green);
+            background: rgba(0,255,157,0.06);
+            border: 1px solid rgba(0,255,157,0.2);
+            padding: 6px 12px;
+            border-radius: 4px;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+
+{% if slide_type == "title" %}
+<div class="slide title-slide">
+    <div>
+        <div class="sys-label">SYS.ARXIV // AI RESEARCH DEEP DIVE</div>
+        <div class="arxiv-badge">● ARXIV PAPER BREAKDOWN</div>
+        <div class="big-title">{{ title }}</div>
+        <div class="hook-text">{{ hook }}</div>
+    </div>
+    <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:12px">Full paper →</div>
+        <div class="url-chip">{{ paper_url }}</div>
+        <div style="margin-top:24px">
+            <div class="slide-indicator">
+                {% for i in range(1,6) %}<div class="dot {% if i == slide_num %}active{% endif %}"></div>{% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="footer">
+        <span>AI RESEARCH ANALYST</span>
+        <span>SLIDE {{ slide_num }} / 5</span>
+    </div>
+</div>
+
+{% elif slide_type == "problem" %}
+<div class="slide content-slide">
+    <div>
+        <div class="sys-label">THE CORE PROBLEM</div>
+        <div class="large-label" style="color:var(--blue)">What gap<br>does it fill?</div>
+        <div class="callout">{{ core_problem }}</div>
+    </div>
+    <div>
+        <div class="slide-indicator" style="margin-bottom:16px">
+            {% for i in range(1,6) %}<div class="dot {% if i == slide_num %}active{% endif %}"></div>{% endfor %}
+        </div>
+        <div class="footer">
+            <span>AI RESEARCH ANALYST</span>
+            <span>SLIDE {{ slide_num }} / 5</span>
+        </div>
+    </div>
+</div>
+
+{% elif slide_type == "methodology" %}
+<div class="slide content-slide">
+    <div>
+        <div class="sys-label">THE METHODOLOGY</div>
+        <div class="large-label" style="color:var(--purple)">How did<br>they do it?</div>
+        <div class="body-text" style="font-size:24px;-webkit-line-clamp:10;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden">{{ methodology }}</div>
+    </div>
+    <div>
+        <div class="slide-indicator" style="margin-bottom:16px">
+            {% for i in range(1,6) %}<div class="dot {% if i == slide_num %}active{% endif %}"></div>{% endfor %}
+        </div>
+        <div class="footer">
+            <span>AI RESEARCH ANALYST</span>
+            <span>SLIDE {{ slide_num }} / 5</span>
+        </div>
+    </div>
+</div>
+
+{% elif slide_type == "benchmarks" %}
+<div class="slide content-slide">
+    <div>
+        <div class="sys-label">THE BREAKTHROUGHS</div>
+        <div class="large-label" style="color:var(--green)">What did<br>they prove?</div>
+        <div class="callout" style="border-left-color:var(--green);background:rgba(0,255,157,0.05);border-color:rgba(0,255,157,0.2)">
+            {{ breakthroughs }}
+        </div>
+    </div>
+    <div>
+        <div class="slide-indicator" style="margin-bottom:16px">
+            {% for i in range(1,6) %}<div class="dot {% if i == slide_num %}active{% endif %}"></div>{% endfor %}
+        </div>
+        <div class="footer">
+            <span>AI RESEARCH ANALYST</span>
+            <span>SLIDE {{ slide_num }} / 5</span>
+        </div>
+    </div>
+</div>
+
+{% elif slide_type == "takeaways" %}
+<div class="slide content-slide">
+    <div>
+        <div class="sys-label">LIMITATIONS & TAKEAWAYS</div>
+        <div class="large-label" style="color:var(--pink)">What's<br>next?</div>
+        <div class="callout" style="border-left-color:var(--pink);background:rgba(255,45,120,0.05);border-color:rgba(255,45,120,0.2);margin-bottom:28px">
+            {{ limitations }}
+        </div>
+        <div class="cta-box">
+            <div class="cta-main">What does this mean for your work? 👇</div>
+            <div class="cta-sub">Drop your thoughts in the comments</div>
+        </div>
+    </div>
+    <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:8px">🔗 Full paper</div>
+        <div class="url-chip">{{ paper_url }}</div>
+        <div style="margin-top:16px">
+            <div class="slide-indicator" style="margin-bottom:16px">
+                {% for i in range(1,6) %}<div class="dot {% if i == slide_num %}active{% endif %}"></div>{% endfor %}
+            </div>
+        </div>
+        <div class="footer">
+            <span>AI RESEARCH ANALYST</span>
+            <span>SLIDE {{ slide_num }} / 5</span>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+
+</body>
+</html>

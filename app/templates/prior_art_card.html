@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Prior Art Comparison</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Inter:wght@400;600;700;900&display=swap');
+
+        :root {
+            --neon-blue:   #00f3ff;
+            --neon-purple: #9d00ff;
+            --neon-green:  #00ff9d;
+            --neon-pink:   #ff2d78;
+            --dark-bg:     #030305;
+            --card-bg:     rgba(10, 10, 20, 0.88);
+            --grid-line:   rgba(0, 243, 255, 0.07);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            width: 1200px;
+            height: 627px;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--dark-bg);
+            background-image:
+                linear-gradient(var(--grid-line) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+            background-size: 40px 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .card {
+            width: 1120px;
+            height: 560px;
+            background: var(--card-bg);
+            border: 1px solid rgba(0, 243, 255, 0.25);
+            border-left: 6px solid var(--neon-green);
+            box-shadow: 0 0 50px rgba(0,255,157,0.1), inset 0 0 20px rgba(0,243,255,0.03);
+            padding: 32px 40px 28px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .card::before {
+            content: 'SYS.ARXIV // VS_PRIOR_ART_ANALYSIS';
+            position: absolute;
+            top: -12px;
+            left: 20px;
+            background: var(--dark-bg);
+            padding: 0 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--neon-green);
+            letter-spacing: 2px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            gap: 20px;
+        }
+
+        .paper-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: white;
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            max-width: 700px;
+        }
+
+        .vs-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: rgba(255,255,255,0.5);
+            text-align: right;
+            line-height: 1.6;
+            flex-shrink: 0;
+        }
+
+        .vs-badge .prior-name {
+            color: var(--neon-blue);
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            flex-grow: 1;
+        }
+
+        thead th {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(0,243,255,0.2);
+            color: rgba(255,255,255,0.5);
+        }
+
+        thead th:first-child { text-align: left; color: rgba(255,255,255,0.4); }
+        thead th:nth-child(2) { text-align: center; color: var(--neon-blue); }
+        thead th:nth-child(3) { text-align: center; color: rgba(255,255,255,0.4); }
+
+        tbody tr {
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+
+        tbody tr:last-child { border-bottom: none; }
+
+        tbody td {
+            padding: 9px 12px;
+            font-size: 13px;
+            line-height: 1.4;
+            vertical-align: middle;
+        }
+
+        /* Dimension label */
+        td.dim {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: rgba(255,255,255,0.45);
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            white-space: nowrap;
+            width: 200px;
+        }
+
+        /* NEW paper cell */
+        td.new-cell {
+            text-align: center;
+            color: white;
+            font-weight: 500;
+        }
+
+        td.new-cell.winner {
+            color: var(--neon-green);
+            font-weight: 700;
+            text-shadow: 0 0 12px rgba(0,255,157,0.5);
+        }
+
+        td.new-cell.loser {
+            color: rgba(255,255,255,0.35);
+            font-weight: 400;
+        }
+
+        /* PRIOR cell */
+        td.prior-cell {
+            text-align: center;
+            color: rgba(255,255,255,0.45);
+            font-weight: 400;
+        }
+
+        td.prior-cell.winner {
+            color: var(--neon-blue);
+            font-weight: 700;
+        }
+
+        /* Row highlight for new winner */
+        tbody tr.row-new-wins { background: rgba(0,255,157,0.03); }
+        tbody tr.row-prior-wins { background: rgba(0,243,255,0.02); }
+
+        /* Footer */
+        .verdict-bar {
+            margin-top: 16px;
+            background: rgba(0,255,157,0.06);
+            border: 1px solid rgba(0,255,157,0.2);
+            border-radius: 6px;
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .verdict-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: var(--neon-green);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .verdict-text {
+            font-size: 13px;
+            color: rgba(255,255,255,0.75);
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="header">
+            <div class="paper-title">{{ paper_title }}</div>
+            <div class="vs-badge">
+                <div style="margin-bottom:4px">VS PRIOR SOTA</div>
+                <div class="prior-name">{{ comparison.prior_paper_name }}</div>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Dimension</th>
+                    <th>This Paper</th>
+                    <th>{{ comparison.prior_paper_name }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for dim in comparison.dimensions %}
+                <tr class="{% if dim.winner == 'new' %}row-new-wins{% elif dim.winner == 'prior' %}row-prior-wins{% endif %}">
+                    <td class="dim">{{ dim.dimension }}</td>
+                    <td class="new-cell {% if dim.winner == 'new' %}winner{% elif dim.winner == 'prior' %}loser{% endif %}">
+                        {% if dim.winner == 'new' %}✦ {% endif %}{{ dim.new_paper }}
+                    </td>
+                    <td class="prior-cell {% if dim.winner == 'prior' %}winner{% endif %}">
+                        {% if dim.winner == 'prior' %}✦ {% endif %}{{ dim.prior_sota }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="verdict-bar">
+            <div class="verdict-label">Verdict</div>
+            <div class="verdict-text">{{ comparison.overall_verdict }}</div>
+        </div>
+    </div>
+</body>
+</html>

@@ -49,14 +49,22 @@ def human_approval_node(state: PipelineState) -> Command[Literal["publish", "rev
         reject_url = f"{base}/api/v1/approvals/via-token?token={reject_token}"
 
         # Prefer carousel slides (new infographic format) for preview.
-        # Fall back to old news cards only if carousel slides aren't available.
-        preview_paths = state.get("carousel_slide_paths") or state.get("image_paths", [])
-        # Send cover + snapshot + first 2 story slides for inline preview
+        # For research pipeline: use research carousel slides if available.
+        # For news pipeline: use carousel_slide_paths. Fall back to image_paths.
+        preview_paths = (
+            state.get("research_carousel_slide_paths")
+            or state.get("carousel_slide_paths")
+            or state.get("image_paths", [])
+        )
+        # Send first 4 slides for inline preview
         preview_paths = [p for p in preview_paths[:4] if __import__("pathlib").Path(p).exists()]
 
-        # Also attach the full carousel PDF so reviewer can see all slides
+        # Attach the relevant PDF so reviewer can see all slides
         attachments = list(preview_paths)
-        carousel_pdf = state.get("carousel_pdf_path", "")
+        carousel_pdf = (
+            state.get("research_carousel_pdf_path")
+            or state.get("carousel_pdf_path", "")
+        )
         if carousel_pdf and __import__("pathlib").Path(carousel_pdf).exists():
             attachments.append(carousel_pdf)
 
