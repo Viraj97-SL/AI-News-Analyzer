@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field
 from app.agents.nodes.approval import human_approval_node
 from app.agents.nodes.architecture_diagram import architecture_diagram_node
 from app.agents.nodes.benchmark_chart import benchmark_chart_node
+from app.agents.nodes.manual_papers import load_manual_papers_node
+from app.agents.nodes.paper_ranker import rank_papers_node
 from app.agents.nodes.prior_art import prior_art_node
 from app.agents.nodes.research_carousel import research_carousel_node
 from app.agents.nodes.scraper import scrape_arxiv_node
@@ -99,13 +101,40 @@ def _render_gauge_svg(label: str, value: int, color: str) -> str:
 # ── 1. Intelligence Nodes ────────────────────────────────────────────────────
 
 def select_paper_node(state: PipelineState) -> dict:
-    """Uses Gemini Flash to select the single most impactful ArXiv paper."""
+    """
+    Select the single best paper to deep-dive into.
+
+    Primary path: use pre-computed paper_rankings (from rank_papers_node).
+      Manual papers always rank first due to the composite-score boost applied
+      in rank_papers_node, so they are always selected when present.
+
+    Fallback: original LLM-picks-from-abstracts approach when rankings are empty.
+    """
     logger.info("research_node_running", step="selecting_best_paper")
     articles = state.get("raw_articles", [])
+    rankings = state.get("paper_rankings", [])
 
     if not articles:
         return {"current_step": "no_papers_found"}
 
+    url_to_article = {a["url"]: a for a in articles}
+
+    # ── Primary: use ranking ───────────────────────────────────────────
+    if rankings:
+        for ranked in rankings:
+            article = url_to_article.get(ranked.get("paper_url", ""))
+            if article:
+                logger.info(
+                    "paper_selected_by_ranking",
+                    title=article["title"],
+                    score=ranked.get("composite_score", 0),
+                    source=article.get("source", "arxiv"),
+                    is_manual=ranked.get("is_manual", False),
+                )
+                return {"chosen_research_paper": article, "current_step": "paper_selected"}
+
+    # ── Fallback: LLM selection ────────────────────────────────────────
+    logger.info("using_llm_fallback_selection", reason="no_rankings_available")
     papers_text = "\n\n".join([
         f"URL: {a['url']}\nTitle: {a['title']}\nAbstract: {a['content'][:1000]}"
         for a in articles[:30]
@@ -127,8 +156,7 @@ def select_paper_node(state: PipelineState) -> dict:
 
     result = (prompt | llm).invoke({"papers": papers_text})
     chosen_paper = next((a for a in articles if a["url"] == result.chosen_url), articles[0])
-
-    logger.info("paper_selected", title=chosen_paper["title"])
+    logger.info("paper_selected_by_llm", title=chosen_paper["title"])
     return {"chosen_research_paper": chosen_paper, "current_step": "paper_selected"}
 
 
@@ -334,6 +362,9 @@ def paperbanana_visual_node(state: PipelineState) -> dict:
     benchmark_chart_path = state.get("benchmark_chart_path", "")
     arch_b64 = state.get("architecture_diagram_b64", "")
     arch_fallback = state.get("architecture_fallback_text", "")
+    paper_figures = state.get("paper_figures", [])
+    arch_caption = paper_figures[0].get("caption", "") if paper_figures else ""
+    extra_figures = paper_figures[1:3] if len(paper_figures) > 1 else []
 
     image_paths: list[str] = []
 
@@ -412,6 +443,8 @@ def paperbanana_visual_node(state: PipelineState) -> dict:
                 benchmark_chart_b64=benchmark_chart_b64,
                 architecture_diagram_b64=arch_b64,
                 architecture_fallback_text=arch_fallback,
+                arch_caption=arch_caption,
+                extra_figures=extra_figures,
             )
 
             filename = f"research_card_{run_id}.png"
@@ -498,28 +531,37 @@ def _route_after_approval(state: PipelineState) -> Literal["publish", "revise"]:
 def build_research_graph(checkpointer=None) -> StateGraph:
     workflow = StateGraph(PipelineState)
 
-    # Scrape ArXiv
-    workflow.add_node("scrape_arxiv", scrape_arxiv_node)
+    # ── Paper sourcing (fan-out; both feed raw_articles via Annotated reducer) ──
+    workflow.add_node("scrape_arxiv",       scrape_arxiv_node)
+    workflow.add_node("load_manual_papers", load_manual_papers_node)
 
-    # Intelligence pipeline
-    workflow.add_node("select_paper",         select_paper_node)
+    # ── Ranking + selection ───────────────────────────────────────────────────
+    workflow.add_node("rank_papers",        rank_papers_node)
+    workflow.add_node("select_paper",       select_paper_node)
+
+    # ── Intelligence pipeline ─────────────────────────────────────────────────
     workflow.add_node("deep_analysis",        deep_analysis_node)
     workflow.add_node("score_research",       score_research_node)       # F8: gauges
     workflow.add_node("score_hook",           score_hook_node)            # F1: hook quality
     workflow.add_node("benchmark_chart",      benchmark_chart_node)       # F5: bar chart
-    workflow.add_node("architecture_diagram", architecture_diagram_node)  # F6: PDF figure
+    workflow.add_node("architecture_diagram", architecture_diagram_node)  # F6: figures
     workflow.add_node("prior_art",            prior_art_node)             # F7: comparison card
     workflow.add_node("research_carousel",    research_carousel_node)     # F2: PDF carousel
 
-    # Visuals + HITL + Publish
+    # ── Visuals + HITL + Publish ──────────────────────────────────────────────
     workflow.add_node("paperbanana_visual", paperbanana_visual_node)
     workflow.add_node("human_approval",     human_approval_node)
     workflow.add_node("publish",            _publish_research_node)
     workflow.add_node("revise",             _revise_research_node)
 
-    # Edges
-    workflow.add_edge(START,                "scrape_arxiv")
-    workflow.add_edge("scrape_arxiv",       "select_paper")
+    # ── Edges ─────────────────────────────────────────────────────────────────
+    # Fan-out from START so scrapers run in parallel
+    workflow.add_edge(START, "scrape_arxiv")
+    workflow.add_edge(START, "load_manual_papers")
+    # Both scrapers must finish before ranking (LangGraph waits automatically)
+    workflow.add_edge("scrape_arxiv",       "rank_papers")
+    workflow.add_edge("load_manual_papers", "rank_papers")
+    workflow.add_edge("rank_papers",        "select_paper")
     workflow.add_edge("select_paper",       "deep_analysis")
     workflow.add_edge("deep_analysis",      "score_research")
     workflow.add_edge("score_research",     "score_hook")

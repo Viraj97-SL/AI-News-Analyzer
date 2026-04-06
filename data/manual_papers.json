@@ -1,0 +1,54 @@
+{
+  "_instructions": "Add ArXiv papers to 'queue' to feature them in the next research pipeline run. They are processed in order and moved to 'archive' automatically. Accepts full ArXiv URLs (https://arxiv.org/abs/XXXX) or bare IDs (XXXX.XXXXX).",
+  "queue": [
+    {"url": "https://arxiv.org/abs/1706.03762", "note": "Attention Is All You Need — the Transformer architecture that started everything"},
+    {"url": "https://arxiv.org/abs/1810.04805", "note": "BERT — bidirectional pre-training that revolutionised NLP"},
+    {"url": "https://arxiv.org/abs/2005.14165", "note": "GPT-3 — Language Models are Few-Shot Learners, scaling laws in action"},
+    {"url": "https://arxiv.org/abs/2203.02155", "note": "InstructGPT — Training language models to follow instructions with human feedback (RLHF)"},
+    {"url": "https://arxiv.org/abs/2307.09288", "note": "LLaMA 2 — Open foundation models from Meta, democratised LLM access"},
+    {"url": "https://arxiv.org/abs/2401.02954", "note": "Mixtral of Experts — efficient sparse mixture-of-experts LLM from Mistral"},
+    {"url": "https://arxiv.org/abs/2501.12948", "note": "DeepSeek-R1 — reasoning via reinforcement learning, shook the industry in Jan 2025"},
+
+    {"url": "https://arxiv.org/abs/2010.11929", "note": "Vision Transformer (ViT) — An Image is Worth 16x16 Words, transformers conquer vision"},
+    {"url": "https://arxiv.org/abs/2112.10752", "note": "Latent Diffusion Models (Stable Diffusion) — high-res image generation from latent space"},
+    {"url": "https://arxiv.org/abs/2302.05543", "note": "LLaVA — Visual Instruction Tuning, multimodal LLMs"},
+
+    {"url": "https://arxiv.org/abs/2203.15556", "note": "Chain-of-Thought Prompting — step-by-step reasoning in LLMs, Google Brain"},
+    {"url": "https://arxiv.org/abs/2005.11401", "note": "RAG — Retrieval-Augmented Generation, grounding LLMs in external knowledge"},
+    {"url": "https://arxiv.org/abs/2210.03629", "note": "ReAct — Reasoning + Acting in LLMs, foundation for AI agents"},
+    {"url": "https://arxiv.org/abs/2303.17580", "note": "HuggingGPT / TaskWeaver — LLMs as controllers for multi-tool AI systems"},
+    {"url": "https://arxiv.org/abs/2308.12950", "note": "AutoGen — multi-agent conversation framework from Microsoft"},
+
+    {"url": "https://arxiv.org/abs/2207.10342", "note": "AlphaFold Multimer — protein complex structure prediction, Nobel Prize work"},
+    {"url": "https://arxiv.org/abs/2310.02994", "note": "Multiple Physics Pretraining (MPP) — the cat videos vs physics paper from Miles Cranmer / PolymathicAI"},
+    {"url": "https://arxiv.org/abs/2305.16127", "note": "Radio Galaxy Zoo foundation model — Anna Scaife's self-supervised learning for radio astronomy"},
+
+    {"url": "https://arxiv.org/abs/2001.08361", "note": "Scaling Laws for Neural Language Models — Kaplan et al., why bigger models work"},
+    {"url": "https://arxiv.org/abs/2203.15556", "note": "Chinchilla — Training Compute-Optimal LLMs, changed how we think about data vs params"},
+    {"url": "https://arxiv.org/abs/2305.18290", "note": "Direct Preference Optimization (DPO) — simpler alternative to RLHF"},
+
+    {"url": "https://arxiv.org/abs/2106.09685", "note": "LoRA — Low-Rank Adaptation, parameter-efficient fine-tuning that everyone uses"},
+    {"url": "https://arxiv.org/abs/2305.14314", "note": "QLoRA — quantised LoRA, fine-tune 65B models on a single GPU"},
+    {"url": "https://arxiv.org/abs/2211.05100", "note": "Flash Attention — IO-aware exact attention, made long context possible"},
+
+    {"url": "https://arxiv.org/abs/2312.10997", "note": "Mamba — selective state space models, the leading alternative to transformers"},
+    {"url": "https://arxiv.org/abs/2406.04744", "note": "KAN — Kolmogorov-Arnold Networks, a fundamentally different neural network architecture"},
+
+    {"url": "https://arxiv.org/abs/1312.6114", "note": "VAE — Variational Autoencoders, foundational generative model"},
+    {"url": "https://arxiv.org/abs/1406.2661", "note": "GANs — Generative Adversarial Networks, Ian Goodfellow's landmark paper"},
+    {"url": "https://arxiv.org/abs/2006.11239", "note": "DDPM — Denoising Diffusion Probabilistic Models, the paper behind the diffusion revolution"},
+
+    {"url": "https://arxiv.org/abs/2303.08774", "note": "GPT-4 Technical Report — multimodal capabilities at scale"},
+    {"url": "https://arxiv.org/abs/2312.11805", "note": "Gemini — Google's multimodal model technical report"},
+    {"url": "https://arxiv.org/abs/2402.17764", "note": "Sora — OpenAI video generation, world simulators as video models"},
+
+    {"url": "https://arxiv.org/abs/1312.5602", "note": "DQN — Playing Atari with Deep RL, DeepMind's breakthrough"},
+    {"url": "https://arxiv.org/abs/1707.06347", "note": "PPO — Proximal Policy Optimization, the RL algorithm behind RLHF"},
+    {"url": "https://arxiv.org/abs/1706.01427", "note": "AlphaGo Zero — mastering Go from self-play, no human knowledge"},
+
+    {"url": "https://arxiv.org/abs/2005.11401", "note": "ColBERT — efficient passage retrieval, foundation for modern search"},
+    {"url": "https://arxiv.org/abs/2212.10560", "note": "Constitutional AI — Anthropic's approach to AI safety and alignment"},
+    {"url": "https://arxiv.org/abs/2309.17453", "note": "Mistral 7B — punching above its weight, efficient open-source LLM"}
+  ],
+  "archive": []
+}

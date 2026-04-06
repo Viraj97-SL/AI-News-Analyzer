@@ -163,10 +163,56 @@
 
         .arch-img {
             width: 100%;
-            height: 180px;
+            height: 160px;
             object-fit: contain;
             border-radius: 4px;
             background: rgba(0,0,0,0.3);
+        }
+
+        .arch-caption {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            color: rgba(255,255,255,0.38);
+            margin-top: 5px;
+            line-height: 1.4;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        /* ── Extra figures strip ──────────────────────────── */
+        .figures-strip {
+            display: flex;
+            gap: 8px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(0,243,255,0.08);
+            border-radius: 8px;
+            padding: 6px 10px;
+            overflow: hidden;
+            max-height: 120px;
+        }
+
+        .figures-strip img {
+            height: 100px;
+            max-width: 200px;
+            object-fit: contain;
+            border-radius: 4px;
+            background: rgba(0,0,0,0.3);
+            flex-shrink: 0;
+        }
+
+        .figures-strip-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(0,243,255,0.5);
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            align-self: center;
+            margin-right: 4px;
         }
 
         /* ── Benchmark chart row ──────────────────────────── */
@@ -238,6 +284,9 @@
             <div class="section-title" style="color:var(--neon-blue)">Method Visual</div>
             {% if architecture_diagram_b64 %}
                 <img class="arch-img" src="data:image/png;base64,{{ architecture_diagram_b64 }}" alt="Architecture diagram">
+                {% if arch_caption %}
+                <div class="arch-caption">{{ arch_caption }}</div>
+                {% endif %}
             {% else %}
                 {{ architecture_fallback_text | safe }}
             {% endif %}
@@ -245,6 +294,17 @@
         {% endif %}
 
     </div>
+
+    <!-- Extra paper figures strip (when multiple figures were extracted) -->
+    {% if extra_figures %}
+    <div class="figures-strip">
+        <div class="figures-strip-label">Figures</div>
+        {% for fig in extra_figures %}
+            <img src="data:image/png;base64,{{ fig.b64 }}" alt="Paper figure {{ loop.index + 1 }}"
+                 title="{{ fig.caption }}">
+        {% endfor %}
+    </div>
+    {% endif %}
 
     <!-- Benchmark chart row (Feature 5) -->
     {% if benchmark_chart_b64 %}

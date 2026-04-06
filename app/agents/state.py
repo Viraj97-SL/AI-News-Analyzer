@@ -63,6 +63,11 @@ class PipelineState(TypedDict):
     chosen_research_paper: NotRequired[dict]
     deep_analysis: NotRequired[dict]
 
+    # ── Manual paper override ────────────────────────────────
+    manual_paper_url: NotRequired[str]       # ArXiv URL/ID passed at trigger time (API or cron)
+    paper_rankings: NotRequired[list[dict]]  # scored+sorted list from rank_papers_node
+    paper_figures: NotRequired[list[dict]]   # [{b64: str, caption: str}] from architecture_diagram_node
+
     # ── Research Analyst Enhancements ───────────────────────
     research_scores: NotRequired[dict]                     # F8: novelty/clarity/benchmarks/reproducibility 1-10
     hook_score: NotRequired[dict]                          # F1: hook quality scores

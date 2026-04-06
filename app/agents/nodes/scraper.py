@@ -192,7 +192,7 @@ def scrape_arxiv_node(state: PipelineState) -> dict:
 
         search = arxiv.Search(
             query="cat:cs.AI OR cat:cs.LG OR cat:cs.CL OR cat:cs.CV",
-            max_results=10,
+            max_results=30,  # more candidates = better ranking coverage
             sort_by=arxiv.SortCriterion.SubmittedDate,
         )
 
