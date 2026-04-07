@@ -42,7 +42,6 @@ def research_carousel_node(state: "PipelineState") -> dict:
     try:
         from html2image import Html2Image  # type: ignore[import]
         from jinja2 import Environment, FileSystemLoader, select_autoescape
-        from PIL import Image  # type: ignore[import]
 
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -109,30 +108,20 @@ def research_carousel_node(state: "PipelineState") -> dict:
                 "current_step": "research_carousel_failed",
             }
 
-        # Combine PNGs → PDF
-        pdf_path = str(OUTPUT_DIR / f"research_carousel_{run_id}.pdf")
-        # Convert to RGB with white background — avoids JPEG2000 codec (openjpeg)
-        # that Pillow requires for RGBA→PDF but is absent in many container builds.
-        def _to_rgb(path: str) -> "Image.Image":
-            img = Image.open(path)
-            if img.mode in ("RGBA", "LA", "P"):
-                bg = Image.new("RGB", img.size, (255, 255, 255))
-                if img.mode == "P":
-                    img = img.convert("RGBA")
-                if img.mode in ("RGBA", "LA"):
-                    bg.paste(img, mask=img.split()[-1])
-                else:
-                    bg.paste(img)
-                return bg
-            return img.convert("RGB")
+        # Use PyMuPDF (fitz) — bundled codecs, no libjpeg/openjpeg dependency.
+        import fitz  # type: ignore[import]
 
-        images = [_to_rgb(p) for p in existing]
-        if len(images) == 1:
-            images[0].save(pdf_path)
-        else:
-            images[0].save(pdf_path, save_all=True, append_images=images[1:])
-        for img in images:
-            img.close()
+        pdf_path = str(OUTPUT_DIR / f"research_carousel_{run_id}.pdf")
+        doc = fitz.open()
+        for png_path in existing:
+            img_doc = fitz.open(png_path)
+            pdf_bytes = img_doc.convert_to_pdf()
+            img_doc.close()
+            img_pdf = fitz.open("pdf", pdf_bytes)
+            doc.insert_pdf(img_pdf)
+            img_pdf.close()
+        doc.save(pdf_path)
+        doc.close()
 
         logger.info("research_carousel_generated", slides=len(existing), pdf=pdf_path)
         return {

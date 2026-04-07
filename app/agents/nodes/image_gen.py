@@ -171,12 +171,6 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
       3… Story slides   — headline, bullets, key stat callout, credibility bar
       N  Closing        — CTA + follow prompt
     """
-    try:
-        from PIL import Image
-    except ImportError:
-        logger.warning("pillow_not_installed", hint="pip install Pillow")
-        return None
-
     template = env.get_template("carousel_slide.html")
     hti = _make_hti((1080, 1080))
 
@@ -247,30 +241,20 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
         logger.error("carousel_no_slides_rendered")
         return None
 
-    pdf_path = str(OUTPUT_DIR / f"carousel_{run_id}.pdf")
-    # Convert to RGB with white background — avoids JPEG2000 codec (openjpeg)
-    # that Pillow requires for RGBA→PDF but is absent in many container builds.
-    def _to_rgb(path: str) -> "Image.Image":
-        img = Image.open(path)
-        if img.mode in ("RGBA", "LA", "P"):
-            bg = Image.new("RGB", img.size, (255, 255, 255))
-            if img.mode == "P":
-                img = img.convert("RGBA")
-            if img.mode in ("RGBA", "LA"):
-                bg.paste(img, mask=img.split()[-1])
-            else:
-                bg.paste(img)
-            return bg
-        return img.convert("RGB")
+    # Use PyMuPDF (fitz) — bundled codecs, no libjpeg/openjpeg dependency.
+    import fitz  # type: ignore[import]
 
-    images = [_to_rgb(p) for p in existing_pngs]
-    if len(images) == 1:
-        images[0].save(pdf_path)
-    else:
-        images[0].save(pdf_path, save_all=True, append_images=images[1:])
-    # Explicitly close image handles
-    for img in images:
-        img.close()
+    pdf_path = str(OUTPUT_DIR / f"carousel_{run_id}.pdf")
+    doc = fitz.open()
+    for png_path in existing_pngs:
+        img_doc = fitz.open(png_path)
+        pdf_bytes = img_doc.convert_to_pdf()
+        img_doc.close()
+        img_pdf = fitz.open("pdf", pdf_bytes)
+        doc.insert_pdf(img_pdf)
+        img_pdf.close()
+    doc.save(pdf_path)
+    doc.close()
 
     logger.info("carousel_generated", slides=len(existing_pngs), pdf=pdf_path)
     return pdf_path, existing_pngs
