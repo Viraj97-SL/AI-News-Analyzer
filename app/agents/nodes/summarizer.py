@@ -28,6 +28,32 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 
+def _parse_json_tolerant(text: str) -> list[dict]:
+    """
+    Parse a JSON array, recovering all complete objects even if the response
+    was truncated mid-stream (LLM hit token/output limit).
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # Find the last complete JSON object boundary and close the array
+        last_close = text.rfind("},")
+        if last_close == -1:
+            last_close = text.rfind("}")
+        if last_close != -1:
+            truncated = text[: last_close + 1].strip()
+            if not truncated.startswith("["):
+                truncated = "[" + truncated
+            truncated += "]"
+            try:
+                result = json.loads(truncated)
+                logger.warning("json_truncation_recovered", objects_recovered=len(result))
+                return result
+            except json.JSONDecodeError:
+                pass
+        raise
+
+
 # ═══════════════════════════════════════════════════════════════
 # Deduplication — content-hash based + title similarity
 # ═══════════════════════════════════════════════════════════════
@@ -118,7 +144,7 @@ def analyze_node(state: PipelineState) -> dict:
         raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
         raw_text = re.sub(r"\s*```$", "", raw_text).strip()
 
-        parsed: list[dict] = json.loads(raw_text)
+        parsed: list[dict] = _parse_json_tolerant(raw_text)
         enriched = list(articles)  # shallow copy so we don't mutate state directly
         for item in parsed:
             idx = item.get("index")
@@ -239,7 +265,7 @@ def summarize_node(state: PipelineState) -> dict:
         raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
         raw_text = re.sub(r"\s*```$", "", raw_text).strip()
 
-        parsed: list[dict] = json.loads(raw_text)
+        parsed: list[dict] = _parse_json_tolerant(raw_text)
         summaries = [
             {
                 "headline": item.get("headline", ""),
