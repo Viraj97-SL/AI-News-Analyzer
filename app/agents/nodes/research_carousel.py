@@ -111,7 +111,8 @@ def research_carousel_node(state: "PipelineState") -> dict:
 
         # Combine PNGs → PDF
         pdf_path = str(OUTPUT_DIR / f"research_carousel_{run_id}.pdf")
-        images = [Image.open(p).convert("RGB") for p in existing]
+        # Use RGBA (FlateDecode/zlib) to avoid libjpeg dependency on Railway.
+        images = [Image.open(p).convert("RGBA") for p in existing]
         if len(images) == 1:
             images[0].save(pdf_path)
         else:

@@ -248,7 +248,9 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
         return None
 
     pdf_path = str(OUTPUT_DIR / f"carousel_{run_id}.pdf")
-    images = [Image.open(p).convert("RGB") for p in existing_pngs]
+    # Use RGBA (FlateDecode/zlib) instead of RGB (DCTDecode/JPEG) so Pillow
+    # does not require libjpeg, which is absent in some Railway builds.
+    images = [Image.open(p).convert("RGBA") for p in existing_pngs]
     if len(images) == 1:
         images[0].save(pdf_path)
     else:
@@ -285,13 +287,18 @@ def image_gen_node(state: PipelineState) -> dict:
         image_paths = _generate_cards(summaries, run_id, env)
         logger.info("news_cards_generated", count=len(image_paths))
 
-        carousel_result = _generate_carousel_pdf(summaries, run_id, env)
-
         result: dict = {"image_paths": image_paths, "current_step": "images_generated"}
-        if carousel_result:
-            pdf_path, slide_paths = carousel_result
-            result["carousel_pdf_path"] = pdf_path
-            result["carousel_slide_paths"] = slide_paths
+
+        # Carousel is generated separately so its failure never discards the
+        # news cards that were already produced above.
+        try:
+            carousel_result = _generate_carousel_pdf(summaries, run_id, env)
+            if carousel_result:
+                pdf_path, slide_paths = carousel_result
+                result["carousel_pdf_path"] = pdf_path
+                result["carousel_slide_paths"] = slide_paths
+        except Exception as ce:
+            logger.error("carousel_gen_error", error=str(ce))
 
         return result
 
