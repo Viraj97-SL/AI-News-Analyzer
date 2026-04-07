@@ -67,15 +67,22 @@ def _fetch_arxiv_paper(url_or_id: str) -> dict | None:
         return None
 
 
+_MAX_QUEUE_PER_RUN = 1  # Process at most 1 queued paper per run to avoid overloading the pipeline
+
+
 def load_manual_papers_node(state: "PipelineState") -> dict:
     """
     Load manually curated papers and add them to raw_articles.
 
     Priority order:
       1. manual_paper_url from state (API-triggered, one-shot override).
-      2. Queue in data/manual_papers.json (reading list).
+      2. Queue in data/manual_papers.json (reading list) — capped at _MAX_QUEUE_PER_RUN.
 
     Processed queue entries are moved to 'archive' so they are not re-run.
+
+    Note: On Railway (ephemeral containers) the file write does not persist between
+    deployments. Keep the queue short (0-1 entries) and prefer the API trigger for
+    one-off overrides.
     """
     articles: list[dict] = []
 
@@ -94,11 +101,15 @@ def load_manual_papers_node(state: "PipelineState") -> dict:
             data = json.loads(_MANUAL_PAPERS_PATH.read_text(encoding="utf-8"))
             queue: list[dict] = data.get("queue", [])
 
-            if queue:
-                logger.info("manual_queue_found", count=len(queue))
+            # Only process the first _MAX_QUEUE_PER_RUN entries to keep the
+            # pipeline fast and within memory limits.
+            batch = queue[:_MAX_QUEUE_PER_RUN]
+
+            if batch:
+                logger.info("manual_queue_found", total=len(queue), processing=len(batch))
                 processed: list[dict] = []
 
-                for entry in queue:
+                for entry in batch:
                     url = entry.get("url", "").strip()
                     if not url:
                         continue
@@ -114,12 +125,12 @@ def load_manual_papers_node(state: "PipelineState") -> dict:
                     processed.append({**entry, "processed_at": datetime.now(UTC).isoformat()})
 
                 # Archive processed entries so they are not re-processed
-                data["queue"] = []
+                data["queue"] = queue[_MAX_QUEUE_PER_RUN:]  # leave remaining entries for future runs
                 data.setdefault("archive", []).extend(processed)
                 _MANUAL_PAPERS_PATH.write_text(
                     json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
                 )
-                logger.info("manual_queue_archived", count=len(processed))
+                logger.info("manual_queue_partially_archived", archived=len(processed), remaining=len(data["queue"]))
 
         except Exception as e:
             logger.warning("manual_papers_file_error", error=str(e))
