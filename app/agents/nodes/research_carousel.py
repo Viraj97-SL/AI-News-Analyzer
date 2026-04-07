@@ -111,8 +111,22 @@ def research_carousel_node(state: "PipelineState") -> dict:
 
         # Combine PNGs → PDF
         pdf_path = str(OUTPUT_DIR / f"research_carousel_{run_id}.pdf")
-        # Use RGBA (FlateDecode/zlib) to avoid libjpeg dependency on Railway.
-        images = [Image.open(p).convert("RGBA") for p in existing]
+        # Convert to RGB with white background — avoids JPEG2000 codec (openjpeg)
+        # that Pillow requires for RGBA→PDF but is absent in many container builds.
+        def _to_rgb(path: str) -> "Image.Image":
+            img = Image.open(path)
+            if img.mode in ("RGBA", "LA", "P"):
+                bg = Image.new("RGB", img.size, (255, 255, 255))
+                if img.mode == "P":
+                    img = img.convert("RGBA")
+                if img.mode in ("RGBA", "LA"):
+                    bg.paste(img, mask=img.split()[-1])
+                else:
+                    bg.paste(img)
+                return bg
+            return img.convert("RGB")
+
+        images = [_to_rgb(p) for p in existing]
         if len(images) == 1:
             images[0].save(pdf_path)
         else:

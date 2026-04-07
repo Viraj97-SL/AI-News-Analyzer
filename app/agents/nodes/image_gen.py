@@ -248,9 +248,22 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
         return None
 
     pdf_path = str(OUTPUT_DIR / f"carousel_{run_id}.pdf")
-    # Use RGBA (FlateDecode/zlib) instead of RGB (DCTDecode/JPEG) so Pillow
-    # does not require libjpeg, which is absent in some Railway builds.
-    images = [Image.open(p).convert("RGBA") for p in existing_pngs]
+    # Convert to RGB with white background — avoids JPEG2000 codec (openjpeg)
+    # that Pillow requires for RGBA→PDF but is absent in many container builds.
+    def _to_rgb(path: str) -> "Image.Image":
+        img = Image.open(path)
+        if img.mode in ("RGBA", "LA", "P"):
+            bg = Image.new("RGB", img.size, (255, 255, 255))
+            if img.mode == "P":
+                img = img.convert("RGBA")
+            if img.mode in ("RGBA", "LA"):
+                bg.paste(img, mask=img.split()[-1])
+            else:
+                bg.paste(img)
+            return bg
+        return img.convert("RGB")
+
+    images = [_to_rgb(p) for p in existing_pngs]
     if len(images) == 1:
         images[0].save(pdf_path)
     else:
