@@ -327,11 +327,15 @@ def score_hook_node(state: PipelineState) -> dict:
                  "Return ONLY the new hook text, nothing else."),
                 ("user", "Current hook: {hook}\n\nFull post for context:\n{full_post}"),
             ])
-            new_hook = (rewrite_prompt | flash).invoke({
+            _hook_resp = (rewrite_prompt | flash).invoke({
                 "weakness": score.reasoning,
                 "hook": hook,
                 "full_post": linkedin_draft[:600],
-            }).content.strip()
+            }).content
+            new_hook = (
+                "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in _hook_resp).strip()
+                if isinstance(_hook_resp, list) else _hook_resp.strip()
+            )
 
             # Splice the new hook back in: replace content up to first double-newline
             rest_start = linkedin_draft.find("\n\n")

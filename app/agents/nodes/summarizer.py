@@ -108,7 +108,13 @@ def analyze_node(state: PipelineState) -> dict:
         ]
 
         response = llm.invoke(messages)
-        raw_text = response.content.strip()
+        content = response.content
+        if isinstance(content, list):
+            raw_text = "".join(
+                p.get("text", "") if isinstance(p, dict) else str(p) for p in content
+            ).strip()
+        else:
+            raw_text = content.strip()
         raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
         raw_text = re.sub(r"\s*```$", "", raw_text).strip()
 
@@ -215,14 +221,20 @@ def summarize_node(state: PipelineState) -> dict:
         ]
 
         response = llm.invoke(messages)
+        content = response.content
+        if isinstance(content, list):
+            raw_text = "".join(
+                p.get("text", "") if isinstance(p, dict) else str(p) for p in content
+            ).strip()
+        else:
+            raw_text = content.strip()
+
         logger.info(
             "summarization_complete",
             articles_input=len(top_articles),
-            response_length=len(response.content),
+            response_length=len(raw_text),
         )
 
-        # Parse JSON response into list[Summary]
-        raw_text = response.content.strip()
         # Strip markdown fences if the model wraps in ```json ... ```
         raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
         raw_text = re.sub(r"\s*```$", "", raw_text).strip()

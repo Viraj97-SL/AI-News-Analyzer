@@ -130,7 +130,13 @@ def linkedin_gen_node(state: PipelineState) -> dict:
         ]
 
         response = llm.invoke(messages)
-        draft = response.content.strip()
+        content = response.content
+        if isinstance(content, list):
+            draft = "".join(
+                p.get("text", "") if isinstance(p, dict) else str(p) for p in content
+            ).strip()
+        else:
+            draft = content.strip()
 
         # Validate length
         if len(draft) > 2800:

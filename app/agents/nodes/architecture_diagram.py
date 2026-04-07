@@ -214,7 +214,11 @@ def _ascii_fallback(methodology: str) -> str:
         ),
         ("user", "{methodology}"),
     ])
-    text = (prompt | llm).invoke({"methodology": methodology[:800]}).content.strip()
+    _resp = (prompt | llm).invoke({"methodology": methodology[:800]}).content
+    text = (
+        "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in _resp).strip()
+        if isinstance(_resp, list) else _resp.strip()
+    )
     return (
         '<pre style="color:#00f3ff;font-family:\'JetBrains Mono\',monospace;'
         "font-size:11px;background:rgba(0,243,255,0.04);padding:14px;"
