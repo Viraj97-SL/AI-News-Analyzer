@@ -24,18 +24,49 @@ settings = get_settings()
 # ═══════════════════════════════════════════════════════════════
 _TAVILY_API_URL = "https://api.tavily.com/search"
 _TAVILY_QUERIES = [
+    # ── Core AI/ML news ───────────────────────────────────────
     "artificial intelligence machine learning news",
     "large language model LLM new release benchmark",
     "AI startup funding product launch investment",
     "generative AI tools research breakthrough",
-    "AI regulation policy government legislation",
-    "AI healthcare medical diagnosis drug discovery",
-    "open source AI model release Hugging Face",
-    "AI robotics autonomous systems deployment",
-    "AI safety alignment interpretability research",
-    "AI in finance trading fraud detection",
-    "edge AI on-device inference hardware chip",
     "multimodal AI vision language audio model",
+    # ── Regulation, policy & ethics ───────────────────────────
+    "AI regulation policy government legislation",
+    "EU AI Act compliance enforcement update",
+    "UK AI safety institute policy regulation",
+    "AI ethics bias fairness accountability",
+    "AI copyright intellectual property lawsuit",
+    # ── Open source & developer ecosystem ─────────────────────
+    "open source AI model release Hugging Face",
+    "AI developer tools framework library release",
+    "RAG retrieval augmented generation technique",
+    "vector database embedding search update",
+    "AI fine-tuning PEFT LoRA training technique",
+    # ── Agentic AI & infrastructure ───────────────────────────
+    "AI agent autonomous workflow multi-agent system",
+    "MLOps ML platform deployment infrastructure",
+    "LLMOps LLM orchestration production serving",
+    "AI inference optimization quantization distillation",
+    "synthetic data generation training dataset",
+    # ── Research frontiers ────────────────────────────────────
+    "AI safety alignment interpretability research",
+    "AI robotics autonomous systems deployment",
+    "edge AI on-device inference hardware chip",
+    "AI reasoning planning chain of thought",
+    "world model video generation AI simulation",
+    "small language model efficient SLM on-device",
+    # ── Industry verticals ────────────────────────────────────
+    "AI healthcare medical diagnosis drug discovery",
+    "AI in finance trading fraud detection",
+    "AI supply chain logistics optimization forecasting",
+    "AI cybersecurity threat detection vulnerability",
+    "AI climate sustainability energy optimization",
+    "AI education personalized learning edtech",
+    "AI manufacturing quality control digital twin",
+    # ── Careers & community ───────────────────────────────────
+    "AI ML engineer hiring salary job market trends",
+    "AI research paper state of the art SOTA benchmark",
+    "AI conference NeurIPS ICML announcement highlight",
 ]
 
 
@@ -112,33 +143,79 @@ def scrape_tavily_node(state: PipelineState) -> dict:
 # Tier 2: RSS Feed Aggregation
 # ═══════════════════════════════════════════════════════════════
 RSS_FEEDS = [
-    # ── Core tech journalism ──────────────────────────────────────────────────
+    # ── Core tech journalism ──────────────────────────────────
     ("TechCrunch AI", "https://techcrunch.com/category/artificial-intelligence/feed/"),
     ("VentureBeat AI", "https://venturebeat.com/category/ai/feed/"),
     ("The Verge AI", "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"),
     ("MIT Tech Review", "https://www.technologyreview.com/feed/"),
     ("Wired AI", "https://www.wired.com/feed/tag/artificial-intelligence/latest/rss"),
     ("Ars Technica AI", "https://feeds.arstechnica.com/arstechnica/technology-lab"),
-    # ── AI-specific blogs & research ─────────────────────────────────────────
+    # ── AI-specific blogs & research (major labs) ────────────
     ("Google AI Blog", "https://blog.google/technology/ai/rss/"),
     ("OpenAI News", "https://openai.com/news/rss.xml"),
     ("Hugging Face Blog", "https://huggingface.co/blog/feed.xml"),
     ("DeepMind Blog", "https://deepmind.google/blog/rss/"),
-    # ── Policy, safety & broader impact ──────────────────────────────────────
+    ("Meta AI Blog", "https://ai.meta.com/blog/rss/"),
+    ("Microsoft AI Blog", "https://blogs.microsoft.com/ai/feed/"),
+    ("NVIDIA AI Blog", "https://blogs.nvidia.com/feed/"),
+    ("Anthropic News", "https://www.anthropic.com/rss.xml"),
+    # ── MLOps, engineering & developer tools ──────────────────
+    ("LangChain Blog", "https://blog.langchain.dev/rss/"),
+    ("Weights & Biases Blog", "https://wandb.ai/fully-connected/rss.xml"),
+    ("MLflow Blog", "https://mlflow.org/blog/feed.xml"),
+    ("Towards Data Science", "https://towardsdatascience.com/feed"),
+    ("The Batch (deeplearning.ai)", "https://www.deeplearning.ai/the-batch/feed/"),
+    # ── Policy, safety & broader impact ──────────────────────
     ("AI Snake Oil", "https://www.aisnakeoil.com/feed"),
     ("Import AI", "https://jack-clark.net/feed/"),
+    ("One Useful Thing (Ethan Mollick)", "https://www.oneusefulthing.org/feed"),
+    ("Simon Willison's Weblog", "https://simonwillison.net/atom/everything/"),
+    # ── UK & Europe focused ──────────────────────────────────
     (
-        "Google News AI Policy",
-        "https://news.google.com/rss/search?q=AI+regulation+policy&hl=en-US&gl=US&ceid=US:en",
+        "Google News UK AI",
+        "https://news.google.com/rss/search?q=UK+artificial+intelligence+news&hl=en-GB&gl=GB&ceid=GB:en",
     ),
-    # ── Industry verticals ────────────────────────────────────────────────────
+    (
+        "Google News EU AI Act",
+        "https://news.google.com/rss/search?q=EU+AI+Act+regulation&hl=en-GB&gl=GB&ceid=GB:en",
+    ),
+    (
+        "Google News UK AI Safety",
+        "https://news.google.com/rss/search?q=UK+AI+safety+institute&hl=en-GB&gl=GB&ceid=GB:en",
+    ),
+    # ── Industry verticals ───────────────────────────────────
     (
         "Google News AI Healthcare",
         "https://news.google.com/rss/search?q=AI+healthcare+medical&hl=en-US&gl=US&ceid=US:en",
     ),
     (
+        "Google News AI Supply Chain",
+        "https://news.google.com/rss/search?q=AI+supply+chain+logistics+optimization&hl=en-US&gl=US&ceid=US:en",
+    ),
+    (
+        "Google News AI Cybersecurity",
+        "https://news.google.com/rss/search?q=AI+cybersecurity+threat+detection&hl=en-US&gl=US&ceid=US:en",
+    ),
+    (
+        "Google News AI Finance",
+        "https://news.google.com/rss/search?q=AI+fintech+trading+banking&hl=en-US&gl=US&ceid=US:en",
+    ),
+    # ── General AI catch-all ─────────────────────────────────
+    (
+        "Google News AI Policy",
+        "https://news.google.com/rss/search?q=AI+regulation+policy&hl=en-US&gl=US&ceid=US:en",
+    ),
+    (
         "Google News AI",
         "https://news.google.com/rss/search?q=artificial+intelligence+machine+learning&hl=en-US&gl=US&ceid=US:en",
+    ),
+    (
+        "Google News AI Agents",
+        "https://news.google.com/rss/search?q=AI+agents+autonomous+workflow+agentic&hl=en-US&gl=US&ceid=US:en",
+    ),
+    (
+        "Google News Open Source AI",
+        "https://news.google.com/rss/search?q=open+source+AI+model+release&hl=en-US&gl=US&ceid=US:en",
     ),
 ]
 
@@ -231,9 +308,23 @@ def scrape_arxiv_node(state: PipelineState) -> dict:
 # Tier 4: Serper.dev (Google News fallback)
 # ═══════════════════════════════════════════════════════════════
 _SERPER_QUERIES = [
+    # ── Broad AI/ML ───────────────────────────────────────────
     "AI machine learning news this week",
     "AI startup funding announcement",
     "open source AI model release",
+    # ── Technical & engineering ────────────────────────────────
+    "LLM benchmark evaluation leaderboard update",
+    "AI agent framework tool release",
+    "MLOps machine learning deployment production",
+    "RAG retrieval augmented generation news",
+    # ── Industry & applied AI ─────────────────────────────────
+    "AI supply chain logistics optimization news",
+    "AI cybersecurity threat detection news",
+    "AI healthcare drug discovery clinical trial",
+    # ── Regulation & careers ──────────────────────────────────
+    "UK AI regulation safety institute news",
+    "AI engineer hiring trends salary 2026",
+    "EU AI Act enforcement compliance news",
 ]
 
 
