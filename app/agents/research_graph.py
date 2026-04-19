@@ -34,11 +34,96 @@ class PaperSelection(BaseModel):
     reasoning: str = Field(description="1-sentence reason why this is the most impactful.")
 
 
-class DeepAnalysis(BaseModel):
-    core_problem: str = Field(description="What specific gap or problem is this paper solving?")
-    methodology: str = Field(description="How did they solve it? Detail the architecture or math.")
-    breakthroughs: str = Field(description="What were the quantifiable results or benchmarks?")
-    limitations: str = Field(description="What are the drawbacks or future work needed?")
+class RichDeepAnalysis(BaseModel):
+    # ── Core fields (kept for backward compat — consumed by benchmark_chart, prior_art nodes) ──
+    core_problem: str = Field(description=(
+        "3-5 sentences: what specific gap or unsolved problem is this paper addressing? "
+        "Be concrete about what previous approaches failed at."
+    ))
+    methodology: str = Field(description=(
+        "4-6 sentences: the core architecture, algorithm, or training procedure. "
+        "Include specific design choices and why they differ from prior work."
+    ))
+    breakthroughs: str = Field(description=(
+        "3-5 sentences: quantifiable results with specific numbers. "
+        "Name the benchmarks and state the delta over prior SOTA."
+    ))
+    limitations: str = Field(description=(
+        "3-4 sentences: honest drawbacks, assumptions that may not hold, "
+        "failure modes, and what future work is explicitly needed."
+    ))
+
+    # ── Enriched fields for deeper analysis ──
+    executive_summary: str = Field(description=(
+        "Two paragraphs of plain-English summary accessible to any software engineer. "
+        "Paragraph 1: what problem and why it matters. "
+        "Paragraph 2: how they solved it and what changed as a result."
+    ))
+    key_contributions: list[str] = Field(
+        description=(
+            "3-5 specific contributions, each a single sentence with concrete details. "
+            "Example: 'Sparse attention mask that reduces memory from O(n²) to O(n log n), "
+            "enabling 4× longer context windows at the same compute budget.'"
+        ),
+        default_factory=list,
+    )
+    technical_innovation: str = Field(description=(
+        "3-4 sentences on what is genuinely NEW vs prior work. "
+        "Specify what changed architecturally or algorithmically vs the closest competing method."
+    ))
+    experiment_setup: str = Field(description=(
+        "3-5 sentences: which datasets were used, which baselines were compared against, "
+        "compute budget, training details, and evaluation protocol. "
+        "If only the abstract is available, note what details are missing."
+    ))
+    quantitative_results: list[str] = Field(
+        description=(
+            "4-6 key metrics as formatted strings: "
+            "'<MetricName>: <value> (<delta> vs <prior>, <context>)'. "
+            "Example: 'MMLU: 89.2% (+3.1% vs GPT-4-Turbo, 5-shot prompting)'. "
+            "Return empty list if no specific numbers are present."
+        ),
+        default_factory=list,
+    )
+    ablation_highlights: str = Field(description=(
+        "3-4 sentences: what components were ablated, what happened when each was removed, "
+        "and what this proves about the design choices. "
+        "If the paper has no ablation study, state that clearly."
+    ))
+    real_world_applications: list[str] = Field(
+        description=(
+            "3 concrete, specific use cases this research enables or improves. "
+            "Not generic 'AI applications' — name the actual product or workflow."
+        ),
+        default_factory=list,
+    )
+    ecosystem_impact: str = Field(description=(
+        "2-3 sentences: which frameworks, libraries, or products are directly affected. "
+        "What does a PyTorch or HuggingFace practitioner need to know?"
+    ))
+    expert_interpretation: str = Field(description=(
+        "3-4 sentences: what does this mean for ML practitioners TODAY? "
+        "What should an engineer do differently after reading this? "
+        "What should they watch for in follow-up work?"
+    ))
+    technical_deep_dive: str = Field(description=(
+        "400-500 words of detailed explanation for a PhD-level reader. "
+        "Cover: specific architecture choices, key equations in plain text, "
+        "training tricks, and WHY each design decision was made. "
+        "Do not include citations or URLs."
+    ))
+    future_directions: list[str] = Field(
+        description=(
+            "3-5 specific open research questions or natural follow-on directions "
+            "that this paper creates or leaves unanswered."
+        ),
+        default_factory=list,
+    )
+    significance_verdict: str = Field(description=(
+        "Exactly one of: 'Incremental', 'Solid Contribution', 'Major Contribution', 'Paradigm Shift'. "
+        "Calibration: Transformers paper = Paradigm Shift, BERT = Major Contribution, "
+        "LoRA = Solid Contribution, minor hyperparameter tuning = Incremental."
+    ))
 
 
 class ResearchScores(BaseModel):
@@ -160,64 +245,305 @@ def select_paper_node(state: PipelineState) -> dict:
     return {"chosen_research_paper": chosen_paper, "current_step": "paper_selected"}
 
 
+_LINKEDIN_RESEARCH_SYSTEM = """\
+You are a LinkedIn content strategist for an elite AI research lab with 150k+ followers.
+
+Write a LinkedIn post about this research paper. Use this EXACT 8-section structure:
+
+─── HOOK (≤210 chars — first 2-3 lines) ───
+Open with a SPECIFIC metric or bold claim that stops the scroll.
+BAD: "This new AI paper is fascinating!"
+GOOD: "New paper beats GPT-4 on reasoning by 23% — using 10× less compute."
+
+[blank line]
+
+─── CONTEXT (2 sentences) ───
+Why was this problem unsolved? What did prior approaches get wrong?
+
+[blank line]
+
+─── CORE IDEA (3-4 sentences) ───
+Plain-English methodology. Specific enough for an ML engineer to grasp the key insight. No jargon without explanation.
+
+[blank line]
+
+─── KEY RESULTS (4-5 lines) ───
+Format: → <Metric>: <value> (<comparison if available>)
+Example: → MMLU: 89.2% (+3.1% vs GPT-4-Turbo)
+
+[blank line]
+
+─── PRACTITIONER IMPACT (2 sentences) ───
+What changes for engineers TODAY? Be concrete — name a framework or workflow.
+
+[blank line]
+
+─── HONEST CAVEAT (1-2 sentences) ───
+One real limitation. Don't cheerleader. Credibility comes from honesty.
+
+[blank line]
+
+─── QUESTION (1 line) ───
+Specific CTA tied to THIS paper. Not "What do you think?" but a real tradeoff question.
+Example: "Would you trade 5% accuracy for 10× inference speed in production?"
+
+[blank line]
+
+─── HASHTAGS ───
+5 max: #AIResearch #MachineLearning + 3 topic-specific
+
+[blank line]
+
+🔗 Full paper in the first comment 👇
+
+HARD RULES:
+- Total: 1,800–2,400 characters
+- NO URLs in body
+- NO filler: "game-changer", "revolutionary", "groundbreaking", "fascinating"
+- Every claim must come from the actual paper results
+- Tone: senior researcher explaining to senior engineer — authoritative, not hype\
+"""
+
+
+def _build_research_article_html(paper: dict, analysis: "RichDeepAnalysis") -> str:  # type: ignore[name-defined]
+    """Generate a structured full-length HTML research article for the email newsletter."""
+    title = paper.get("title", "Research Deep Dive")
+    url = paper.get("url", "")
+
+    verdict_colors = {
+        "Paradigm Shift": ("#00ff9d", "#003322"),
+        "Major Contribution": ("#00f3ff", "#001a22"),
+        "Solid Contribution": ("#9d00ff", "#1a0022"),
+        "Incremental": ("#ff2d78", "#220011"),
+    }
+    verdict = analysis.significance_verdict
+    v_color, v_bg = verdict_colors.get(verdict, ("#aaa", "#111"))
+
+    contributions_html = "".join(
+        f'<li style="margin-bottom:10px">{c}</li>' for c in analysis.key_contributions
+    )
+    results_html = "".join(
+        f'<li style="margin-bottom:8px;font-family:monospace;font-size:14px">{r}</li>'
+        for r in analysis.quantitative_results
+    )
+    applications_html = "".join(
+        f'<li style="margin-bottom:10px">{a}</li>' for a in analysis.real_world_applications
+    )
+    directions_html = "".join(
+        f'<li style="margin-bottom:8px">{d}</li>' for d in analysis.future_directions
+    )
+
+    return f"""
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:700px;
+            margin:0 auto;color:#1a1a2e;line-height:1.75;background:#fff">
+
+  <!-- Header banner -->
+  <div style="background:linear-gradient(135deg,#0a0a1a,#1a0a2e);color:white;
+              padding:36px 40px;border-radius:12px;margin-bottom:32px">
+    <div style="font-family:monospace;font-size:10px;color:#00f3ff;letter-spacing:2px;
+                text-transform:uppercase;margin-bottom:12px">
+      AI Research Analyst · Research Deep Dive
+    </div>
+    <h1 style="font-size:22px;font-weight:800;margin:0 0 16px;line-height:1.3;color:#fff">
+      {title}
+    </h1>
+    <div style="display:inline-block;background:{v_bg};border:1px solid {v_color};
+                color:{v_color};font-family:monospace;font-size:11px;padding:4px 12px;
+                border-radius:4px;letter-spacing:1px">
+      VERDICT: {verdict.upper()}
+    </div>
+    <div style="margin-top:16px;font-size:12px;color:rgba(255,255,255,0.45)">
+      🔗 <a href="{url}" style="color:#00f3ff">{url}</a>
+    </div>
+  </div>
+
+  <!-- Executive Summary -->
+  <h2 style="font-size:18px;font-weight:700;color:#0a0a1a;border-left:4px solid #00f3ff;
+             padding-left:14px;margin:0 0 12px">Executive Summary</h2>
+  <p style="margin:0 0 28px;color:#333;font-size:15px">{analysis.executive_summary}</p>
+
+  <!-- The Problem -->
+  <h2 style="font-size:18px;font-weight:700;color:#0a0a1a;border-left:4px solid #9d00ff;
+             padding-left:14px;margin:0 0 12px">The Problem</h2>
+  <p style="margin:0 0 28px;color:#333;font-size:15px">{analysis.core_problem}</p>
+
+  <!-- What's Genuinely New -->
+  <h2 style="font-size:18px;font-weight:700;color:#0a0a1a;border-left:4px solid #ff2d78;
+             padding-left:14px;margin:0 0 12px">What's Genuinely New</h2>
+  <p style="margin:0 0 28px;color:#333;font-size:15px">{analysis.technical_innovation}</p>
+
+  <!-- Key Contributions -->
+  <h2 style="font-size:18px;font-weight:700;color:#0a0a1a;border-left:4px solid #00ff9d;
+             padding-left:14px;margin:0 0 12px">Key Contributions</h2>
+  <ol style="margin:0 0 28px;padding-left:22px;color:#333;font-size:15px">
+    {contributions_html}
+  </ol>
+
+  <!-- Technical Deep Dive -->
+  <div style="background:#f8f9ff;border:1px solid #e0e8ff;border-radius:10px;
+              padding:28px 32px;margin-bottom:28px">
+    <h2 style="font-size:18px;font-weight:700;color:#0a0a1a;margin:0 0 14px">
+      Technical Deep Dive
+    </h2>
+    <p style="margin:0;color:#333;font-size:15px;white-space:pre-line">{analysis.technical_deep_dive}</p>
+  </div>
+
+  <!-- Experiment Setup -->
+  <h2 style="font-size:18px;font-weight:700;color:#0a0a1a;border-left:4px solid #00f3ff;
+             padding-left:14px;margin:0 0 12px">Experiment Setup</h2>
+  <p style="margin:0 0 28px;color:#333;font-size:15px">{analysis.experiment_setup}</p>
+
+  <!-- Quantitative Results -->
+  <h2 style="font-size:18px;font-weight:700;color:#0a0a1a;border-left:4px solid #00ff9d;
+             padding-left:14px;margin:0 0 12px">Results at a Glance</h2>
+  <ul style="margin:0 0 28px;padding-left:20px;list-style:none;color:#333">
+    {results_html if results_html else '<li style="color:#999;font-style:italic">See full paper for detailed results.</li>'}
+  </ul>
+
+  <!-- Ablation Insights -->
+  <h2 style="font-size:18px;font-weight:700;color:#0a0a1a;border-left:4px solid #9d00ff;
+             padding-left:14px;margin:0 0 12px">Ablation Study Insights</h2>
+  <p style="margin:0 0 28px;color:#333;font-size:15px">{analysis.ablation_highlights}</p>
+
+  <!-- Real-World Applications -->
+  <h2 style="font-size:18px;font-weight:700;color:#0a0a1a;border-left:4px solid #ff2d78;
+             padding-left:14px;margin:0 0 12px">Real-World Applications</h2>
+  <ul style="margin:0 0 28px;padding-left:22px;color:#333;font-size:15px">
+    {applications_html}
+  </ul>
+
+  <!-- Ecosystem Impact -->
+  <h2 style="font-size:18px;font-weight:700;color:#0a0a1a;border-left:4px solid #00f3ff;
+             padding-left:14px;margin:0 0 12px">Ecosystem Impact</h2>
+  <p style="margin:0 0 28px;color:#333;font-size:15px">{analysis.ecosystem_impact}</p>
+
+  <!-- Expert Interpretation -->
+  <div style="background:linear-gradient(135deg,rgba(0,243,255,0.05),rgba(157,0,255,0.05));
+              border:1px solid rgba(0,243,255,0.2);border-radius:10px;
+              padding:28px 32px;margin-bottom:28px">
+    <h2 style="font-size:18px;font-weight:700;color:#0a0a1a;margin:0 0 14px">
+      What This Means for You
+    </h2>
+    <p style="margin:0;color:#333;font-size:15px">{analysis.expert_interpretation}</p>
+  </div>
+
+  <!-- Limitations -->
+  <h2 style="font-size:18px;font-weight:700;color:#0a0a1a;border-left:4px solid #ff2d78;
+             padding-left:14px;margin:0 0 12px">Honest Limitations</h2>
+  <p style="margin:0 0 28px;color:#333;font-size:15px">{analysis.limitations}</p>
+
+  <!-- Future Directions -->
+  <h2 style="font-size:18px;font-weight:700;color:#0a0a1a;border-left:4px solid #9d00ff;
+             padding-left:14px;margin:0 0 12px">What Comes Next</h2>
+  <ul style="margin:0 0 36px;padding-left:22px;color:#333;font-size:15px">
+    {directions_html}
+  </ul>
+
+  <!-- Footer -->
+  <div style="background:#f5f5f5;border-radius:8px;padding:20px 24px;
+              font-size:13px;color:#666;text-align:center">
+    AI Research Analyst · Powered by Gemini 2.5 Pro ·
+    <a href="{url}" style="color:#0a66c2">Read the full paper →</a>
+  </div>
+</div>
+"""
+
+
 def deep_analysis_node(state: PipelineState) -> dict:
-    """Uses Gemini Pro to extract technical analysis and draft algorithm-optimised LinkedIn post."""
+    """Deep analysis with Gemini Pro: extracts 16-field rich analysis, LLM LinkedIn draft, full article HTML."""
     logger.info("research_node_running", step="deep_analysis")
     paper = state.get("chosen_research_paper")
 
     if not paper:
         return {"current_step": "error_no_paper"}
 
-    llm = ChatGoogleGenerativeAI(
+    # ── 1. Rich structured analysis (Gemini 2.5 Pro) ──────────────────────
+    analysis_llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-pro",
-        temperature=0.4,
+        temperature=0.3,
         api_key=settings.google_api_key,
-    ).with_structured_output(DeepAnalysis)
+    ).with_structured_output(RichDeepAnalysis)
 
-    prompt = ChatPromptTemplate.from_messages([
+    analysis_prompt = ChatPromptTemplate.from_messages([
         ("system",
-         "You are a Senior AI Research Scientist. Analyse this paper. Extract deep technical concepts, "
-         "explaining them clearly for a highly technical audience (PhDs, ML Engineers). "
-         "Do not use fluff or generic marketing speak."),
-        ("user", "Title: {title}\n\nContent: {content}"),
+         "You are a Senior AI Research Scientist and Principal Investigator. "
+         "Analyse this research paper deeply. Extract technical concepts with precision, "
+         "explaining them for a highly technical audience (PhDs, ML Engineers, Staff Engineers). "
+         "Do NOT use marketing speak or generic praise. Be specific, calibrated, and honest. "
+         "If the content is only an abstract, extract what you can and clearly note where "
+         "full-paper details are needed."),
+        ("user", "Title: {title}\n\nPaper Content:\n{content}"),
     ])
 
-    analysis: DeepAnalysis = (prompt | llm).invoke({
-        "title": paper["title"],
-        "content": paper["content"],
-    })
+    try:
+        analysis: RichDeepAnalysis = (analysis_prompt | analysis_llm).invoke({
+            "title": paper["title"],
+            "content": paper["content"],
+        })
+    except Exception as e:
+        logger.error("rich_analysis_failed", error=str(e))
+        return {"current_step": "error_analysis_failed"}
 
-    # ── LinkedIn draft: hook-first, algorithm-optimised format ──
-    core_snippet = analysis.core_problem[:180].rsplit(".", 1)[0]
-    linkedin_draft = (
-        f"🚨 This paper just changed how I think about AI: {paper['title'][:80]}\n\n"
-        f"The problem nobody is solving:\n"
-        f"{core_snippet}.\n\n"
-        f"Here's what they did differently:\n\n"
-        f"1/ {analysis.methodology[:200].rsplit(' ', 1)[0]}...\n\n"
-        f"2/ Results that matter:\n"
-        f"{analysis.breakthroughs[:200].rsplit(' ', 1)[0]}...\n\n"
-        f"3/ Honest limitations:\n"
-        f"{analysis.limitations[:150].rsplit(' ', 1)[0]}...\n\n"
-        f"What does this mean for your work? Drop your take below 👇\n\n"
-        f"🔗 Full paper in the first comment.\n\n"
-        f"#AIResearch #MachineLearning #DeepLearning #LLM #ArXiv"
+    # ── 2. LinkedIn draft via LLM (Gemini 2.5 Flash) ─────────────────────
+    flash_llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash",
+        temperature=0.7,
+        api_key=settings.google_api_key,
     )
 
-    newsletter_html = f"""
-    <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-        <h2 style="color: #0a66c2;">Deep Dive: {paper['title']}</h2>
-        <p><strong>Read the paper:</strong> <a href="{paper['url']}">{paper['url']}</a></p>
-        <h3 style="border-bottom: 1px solid #eee; padding-bottom: 5px;">The Core Problem</h3>
-        <p>{analysis.core_problem}</p>
-        <h3 style="border-bottom: 1px solid #eee; padding-bottom: 5px;">Innovative Methodology</h3>
-        <p>{analysis.methodology}</p>
-        <h3 style="border-bottom: 1px solid #eee; padding-bottom: 5px;">Key Breakthroughs</h3>
-        <p>{analysis.breakthroughs}</p>
-        <h3 style="border-bottom: 1px solid #eee; padding-bottom: 5px;">Limitations & Future Work</h3>
-        <p>{analysis.limitations}</p>
-    </div>
-    """
+    linkedin_prompt = ChatPromptTemplate.from_messages([
+        ("system", _LINKEDIN_RESEARCH_SYSTEM),
+        ("user",
+         "Paper title: {title}\n\n"
+         "Core problem: {core_problem}\n\n"
+         "Methodology: {methodology}\n\n"
+         "Key contributions:\n{contributions}\n\n"
+         "Quantitative results:\n{results}\n\n"
+         "Practitioner impact: {expert_interpretation}\n\n"
+         "Limitations: {limitations}\n\n"
+         "Significance verdict: {verdict}"),
+    ])
+
+    contributions_text = "\n".join(f"• {c}" for c in analysis.key_contributions)
+    results_text = "\n".join(f"• {r}" for r in analysis.quantitative_results)
+
+    try:
+        linkedin_response = (linkedin_prompt | flash_llm).invoke({
+            "title": paper["title"],
+            "core_problem": analysis.core_problem,
+            "methodology": analysis.methodology,
+            "contributions": contributions_text or "See methodology above.",
+            "results": results_text or analysis.breakthroughs,
+            "expert_interpretation": analysis.expert_interpretation,
+            "limitations": analysis.limitations,
+            "verdict": analysis.significance_verdict,
+        })
+        raw = linkedin_response.content
+        linkedin_draft = (
+            "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in raw).strip()
+            if isinstance(raw, list) else raw.strip()
+        )
+    except Exception as e:
+        logger.warning("linkedin_draft_llm_failed", error=str(e), fallback="using_template")
+        linkedin_draft = (
+            f"New research: {paper['title'][:80]}\n\n"
+            f"{analysis.core_problem[:200]}\n\n"
+            f"Key finding: {analysis.breakthroughs[:200]}\n\n"
+            f"What does this mean for your work?\n\n"
+            f"🔗 Full paper in the first comment 👇\n\n"
+            f"#AIResearch #MachineLearning #DeepLearning"
+        )
+
+    # ── 3. Full research article HTML for email newsletter ────────────────
+    newsletter_html = _build_research_article_html(paper, analysis)
+
+    logger.info(
+        "deep_analysis_complete",
+        verdict=analysis.significance_verdict,
+        contributions=len(analysis.key_contributions),
+        results=len(analysis.quantitative_results),
+        linkedin_chars=len(linkedin_draft),
+    )
 
     return {
         "deep_analysis": analysis.model_dump(),
@@ -256,8 +582,8 @@ def score_research_node(state: PipelineState) -> dict:
         scores: ResearchScores = (prompt | llm).invoke({
             "title": paper.get("title", ""),
             "core_problem": analysis.get("core_problem", ""),
-            "methodology": analysis.get("methodology", ""),
-            "breakthroughs": analysis.get("breakthroughs", ""),
+            "methodology": analysis.get("methodology", "") + "\n\n" + analysis.get("technical_innovation", ""),
+            "breakthroughs": analysis.get("breakthroughs", "") + "\n\n" + "\n".join(analysis.get("quantitative_results", [])),
             "limitations": analysis.get("limitations", ""),
         })
 

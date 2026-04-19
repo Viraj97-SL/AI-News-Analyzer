@@ -77,6 +77,7 @@ def human_approval_node(state: PipelineState) -> Command[Literal["publish", "rev
             approve_url=approve_url,
             reject_url=reject_url,
             image_paths=attachments,
+            research_article_html=state.get("newsletter_html", ""),
         )
         logger.info("approval_email_sent", run_id=run_id)
     except Exception as e:

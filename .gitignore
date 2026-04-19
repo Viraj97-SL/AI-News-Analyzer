@@ -48,3 +48,6 @@ tests/integration/cassettes/
 
 # Logs
 *.log
+
+# Internal docs (not for public repo)
+docs/

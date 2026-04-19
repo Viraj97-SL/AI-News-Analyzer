@@ -80,22 +80,41 @@ class EmailService:
             approve_url: str,
             reject_url: str,
             image_paths: list[str] | None = None,
+            research_article_html: str = "",
     ) -> None:
         recipients = settings.email_recipients[:1]
 
+        article_section = (
+            f"""
+            <details open style="margin-top:28px">
+              <summary style="cursor:pointer;font-size:15px;font-weight:600;color:#0a66c2;
+                              padding:10px 0;border-top:1px solid #e0e0e0">
+                📄 Full Research Article Preview (click to collapse)
+              </summary>
+              <div style="border:1px solid #e8eaf0;border-radius:10px;padding:8px;
+                          margin-top:12px;max-height:700px;overflow-y:auto;background:#fafbff">
+                {research_article_html}
+              </div>
+            </details>
+            """
+            if research_article_html else ""
+        )
+
         html = f"""
         <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-                    max-width: 600px; margin: 0 auto;">
+                    max-width: 700px; margin: 0 auto;">
             <h2>AI Pipeline - Review Required</h2>
             <p>Run <code>{run_id[:8]}</code> has generated content ready for publishing.</p>
 
             <h3>LinkedIn Post Preview:</h3>
             <div style="background: #f5f5f5; padding: 16px; border-radius: 8px;
-                        white-space: pre-wrap;">
+                        white-space: pre-wrap; font-size: 14px; line-height: 1.6;">
                 {linkedin_preview}
             </div>
 
-            <div style="margin-top: 24px; text-align: center;">
+            {article_section}
+
+            <div style="margin-top: 28px; text-align: center;">
                 <a href="{approve_url}"
                    style="background: #0a66c2; color: white; padding: 12px 32px;
                           border-radius: 6px; text-decoration: none; margin-right: 12px;">
