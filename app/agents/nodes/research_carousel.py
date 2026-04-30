@@ -60,8 +60,13 @@ def research_carousel_node(state: "PipelineState") -> dict:
             custom_flags=["--no-sandbox", "--hide-scrollbars", "--disable-gpu"],
         )
 
-        # Hook = first 210 chars of linkedin_draft, split cleanly on word boundary
-        hook = linkedin_draft[:210].rsplit(" ", 1)[0] if len(linkedin_draft) > 210 else linkedin_draft
+        # Strip section-header lines (─── LABEL ───) produced by the LinkedIn prompt
+        # before extracting the hook, so those labels never appear on the cover slide.
+        clean_draft = "\n".join(
+            line for line in linkedin_draft.splitlines()
+            if not line.strip().startswith("───")
+        ).strip()
+        hook = clean_draft[:210].rsplit(" ", 1)[0] if len(clean_draft) > 210 else clean_draft
 
         slide_defs = [
             # 1 · Cover
