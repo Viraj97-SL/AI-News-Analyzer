@@ -30,13 +30,24 @@ settings = get_settings()
 
 def _parse_json_tolerant(text: str) -> list[dict]:
     """
-    Parse a JSON array, recovering all complete objects even if the response
-    was truncated mid-stream (LLM hit token/output limit).
+    Parse a JSON array, recovering from two common LLM failure modes:
+    - Extra data: LLM appended explanation text after the closing bracket.
+    - Truncation: LLM hit a token/output limit mid-stream.
     """
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
-        # Find the last complete JSON object boundary and close the array
+    except json.JSONDecodeError as e:
+        # "Extra data" means valid JSON was found but trailing content follows it.
+        # e.pos points to the start of the extra content; slice it off and retry.
+        if "Extra data" in str(e):
+            try:
+                result = json.loads(text[: e.pos])
+                logger.warning("json_extra_data_recovered", objects_recovered=len(result))
+                return result
+            except json.JSONDecodeError:
+                pass
+
+        # Truncation fallback: find the last complete object and close the array.
         last_close = text.rfind("},")
         if last_close == -1:
             last_close = text.rfind("}")
