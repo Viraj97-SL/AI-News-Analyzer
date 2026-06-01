@@ -6,20 +6,21 @@ Produces:
   - 1080x1080px carousel slides combined into a PDF (LinkedIn document post)
 
 Carousel slide order:
-  1. Cover  — story count + category breakdown chips
-  2. Snapshot — "Week in Numbers" infographic (4 stat boxes + bar chart)
-  3. Story × N — headline + bullet points + key stat callout + credibility bar
-  4. Closing — CTA + follow prompt
+  1. Cover  — story count + date + author branding
+  2. Story × N — headline + 3 bullet points + real article image + trust badge
+  3. Closing — CTA + follow prompt
 """
 
 from __future__ import annotations
 
+import base64
 import re
 from collections import Counter
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import httpx
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 if TYPE_CHECKING:
@@ -49,32 +50,20 @@ CATEGORY_COLORS: dict[str, str] = {
 # Patterns to extract a key stat/number from a body string.
 # Listed in priority order — first match wins.
 _STAT_PATTERNS: list[tuple[str, str]] = [
-    # Dollar amounts:  $4.6 billion,  $200M,  $1.2T
     (r"\$[\d.,]+\s*(?:billion|trillion|million|B|M|T)\b", "funding / valuation"),
-    # Percentages:  94.2%,  38%
     (r"\b\d+(?:\.\d+)?\s*%", "improvement / accuracy"),
-    # Multipliers:  3× faster,  10x better
     (r"\b\d+(?:\.\d+)?\s*[x×]\s*(?:faster|better|more|improvement|speedup)\b", "speedup"),
-    # AI parameter counts:  70B parameters,  405B tokens
     (r"\b\d+(?:\.\d+)?[BM]\b(?=\s*(?:param|token|model))", "parameters"),
-    # Benchmark scores with numbers:  top 3,  #1
     (r"(?:top|#)\s*\d+\b", "ranking"),
-    # Large plain numbers:  42 billion,  200 million
     (r"\b\d+(?:\.\d+)?\s*(?:billion|million)\b", "scale"),
 ]
 
 
 def _extract_key_stat(body: str) -> dict | None:
-    """
-    Find the most prominent number/statistic in a summary body.
-
-    Returns a dict with 'value' (the raw matched string, trimmed) and
-    'label' (2–4 words of surrounding context), or None if nothing found.
-    """
+    """Find the most prominent number/statistic in a summary body."""
     for pattern, fallback_label in _STAT_PATTERNS:
         m = re.search(pattern, body, re.IGNORECASE)
         if m:
-            # Build a short label from the words that follow the match
             after = body[m.end():].strip()
             label_words = after.split()[:4]
             label = " ".join(label_words).rstrip(".,;:") or fallback_label
@@ -83,9 +72,67 @@ def _extract_key_stat(body: str) -> dict | None:
 
 
 def _extract_key_points(body: str) -> list[str]:
-    """Split a summary body into up to 4 readable bullet points."""
+    """Split a summary body into up to 3 readable bullet points, each ≤ 110 chars."""
     sentences = re.split(r"(?<=[.!?])\s+", body.strip())
-    return [s for s in sentences if len(s) > 20][:4]
+    points = [s for s in sentences if len(s) > 20][:3]
+    return [p[:110].rstrip(" .,") + ("…" if len(p) > 110 else "") for p in points]
+
+
+def _credibility_tier(score: float, source_count: int) -> dict:
+    """Map internal credibility score to an honest, display-safe trust badge."""
+    if score >= 0.75:
+        return {"label": "Major Outlets", "color": "#00ff9d", "icon": "◉"}
+    elif score >= 0.55:
+        return {"label": "Press Coverage", "color": "#ffe600", "icon": "◎"}
+    else:
+        return {"label": "Emerging Story", "color": "#888888", "icon": "○"}
+
+
+def _fetch_og_image_b64(url: str) -> str | None:
+    """
+    Fetch the og:image from an article URL and return it as a base64 string.
+
+    Returns None on any failure — the template will show a category gradient fallback.
+    """
+    try:
+        # Step 1: fetch the article HTML (fast HEAD-then-GET with short timeout)
+        with httpx.Client(timeout=5, follow_redirects=True) as client:
+            resp = client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            resp.raise_for_status()
+            html = resp.text
+
+        # Step 2: extract og:image URL
+        og_match = re.search(
+            r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+            html,
+            re.IGNORECASE,
+        )
+        if not og_match:
+            # Try reversed attribute order: content first, then property
+            og_match = re.search(
+                r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+                html,
+                re.IGNORECASE,
+            )
+        if not og_match:
+            return None
+
+        image_url = og_match.group(1).strip()
+        if not image_url.startswith("http"):
+            return None
+
+        # Step 3: download the image
+        with httpx.Client(timeout=8, follow_redirects=True) as client:
+            img_resp = client.get(image_url, headers={"User-Agent": "Mozilla/5.0"})
+            img_resp.raise_for_status()
+            content_type = img_resp.headers.get("content-type", "")
+            if not content_type.startswith("image/"):
+                return None
+            return base64.b64encode(img_resp.content).decode("utf-8")
+
+    except Exception as e:
+        logger.debug("og_image_fetch_failed", url=url, error=str(e))
+        return None
 
 
 def _build_category_breakdown(summaries: list[dict]) -> list[dict]:
@@ -101,24 +148,6 @@ def _build_category_breakdown(summaries: list[dict]) -> list[dict]:
         }
         for cat, count in counts.most_common()
     ]
-
-
-def _build_week_stats(summaries: list[dict]) -> dict:
-    """Aggregate key numbers shown on the 'Week in Numbers' snapshot slide."""
-    all_sources: set[str] = set()
-    for s in summaries:
-        all_sources.update(s.get("source_urls", []))
-
-    scores = [s.get("credibility_score", 0.0) for s in summaries]
-    avg_cred = sum(scores) / len(scores) if scores else 0.0
-    categories = {s.get("category", "Other") for s in summaries}
-
-    return {
-        "story_count": len(summaries),
-        "source_count": len(all_sources) or sum(len(s.get("source_urls", [])) for s in summaries),
-        "avg_credibility": f"{avg_cred:.0%}",
-        "category_count": len(categories),
-    }
 
 
 def _make_hti(size: tuple[int, int]):
@@ -161,24 +190,21 @@ def _generate_cards(summaries: list[dict], run_id: str, env: Environment) -> lis
 # LinkedIn carousel (1080 × 1080 slides → PDF)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment) -> str | None:
+def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment) -> tuple[str, list[str]] | None:
     """
     Render infographic carousel slides and combine into a single PDF.
 
     Slide order:
-      1  Cover          — story count + category breakdown chips
-      2  Snapshot       — "Week in Numbers" 4-box infographic + bar chart
-      3… Story slides   — headline, bullets, key stat callout, credibility bar
-      N  Closing        — CTA + follow prompt
+      1  Cover     — story count + date + author branding
+      2… Stories   — headline, 3 bullets, real article photo, trust badge
+      N  Closing   — CTA + follow prompt
     """
     template = env.get_template("carousel_slide.html")
     hti = _make_hti((1080, 1080))
 
-    story_summaries = summaries[:10]
+    story_summaries = summaries[:8]
     total_slides = len(story_summaries)
     date_str = date.today().strftime("%B %d, %Y")
-    categories = _build_category_breakdown(story_summaries)
-    stats = _build_week_stats(story_summaries)
     slide_pngs: list[str] = []
 
     # ── 1. Cover slide ────────────────────────────────────────
@@ -186,27 +212,26 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
         slide_type="cover",
         story_count=total_slides,
         date_str=date_str,
-        categories=categories,
     )
     name = f"carousel_{run_id}_cover.png"
     hti.screenshot(html_str=html, save_as=name)
     slide_pngs.append(str(OUTPUT_DIR / name))
 
-    # ── 2. Snapshot "Week in Numbers" slide ───────────────────
-    html = template.render(
-        slide_type="snapshot",
-        stats=stats,
-        categories=categories,
-    )
-    name = f"carousel_{run_id}_snapshot.png"
-    hti.screenshot(html_str=html, save_as=name)
-    slide_pngs.append(str(OUTPUT_DIR / name))
-
-    # ── 3. One story slide per summary ────────────────────────
+    # ── 2. One story slide per summary ────────────────────────
     for i, summary in enumerate(story_summaries):
         body = summary.get("body", "")
         cred_score = summary.get("credibility_score", 0.0)
         source_urls = summary.get("source_urls", [])
+        source_count = len(source_urls)
+        category = summary.get("category", "Other")
+
+        # Fetch real article image (best-effort, ~5s timeout per story)
+        primary_url = source_urls[0] if source_urls else ""
+        story_image_b64 = _fetch_og_image_b64(primary_url) if primary_url else None
+        if story_image_b64:
+            logger.debug("og_image_fetched", slide=i, url=primary_url)
+        else:
+            logger.debug("og_image_fallback", slide=i, url=primary_url)
 
         html = template.render(
             slide_type="story",
@@ -215,23 +240,23 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
             headline=summary.get("headline", ""),
             key_points=_extract_key_points(body),
             key_stat=_extract_key_stat(body),
-            category=summary.get("category", "AI"),
-            credibility=f"{cred_score:.0%}",
-            cred_pct=round(cred_score * 100),
-            source_count=len(source_urls),
+            category=category,
+            category_color=CATEGORY_COLORS.get(category, CATEGORY_COLORS["Other"]),
+            story_image_b64=story_image_b64,
+            trust_tier=_credibility_tier(cred_score, source_count),
+            source_count=source_count,
         )
         name = f"carousel_{run_id}_{i}.png"
         hti.screenshot(html_str=html, save_as=name)
         slide_pngs.append(str(OUTPUT_DIR / name))
 
-    # ── 4. Closing / CTA slide ────────────────────────────────
+    # ── 3. Closing / CTA slide ────────────────────────────────
     html = template.render(slide_type="closing")
     name = f"carousel_{run_id}_close.png"
     hti.screenshot(html_str=html, save_as=name)
     slide_pngs.append(str(OUTPUT_DIR / name))
 
     # ── Combine PNGs → PDF ────────────────────────────────────
-    # Only include slides that were actually written to disk
     existing_pngs = [p for p in slide_pngs if Path(p).exists()]
     missing = len(slide_pngs) - len(existing_pngs)
     if missing:
@@ -241,7 +266,6 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
         logger.error("carousel_no_slides_rendered")
         return None
 
-    # Use PyMuPDF (fitz) — bundled codecs, no libjpeg/openjpeg dependency.
     import fitz  # type: ignore[import]
 
     pdf_path = str(OUTPUT_DIR / f"carousel_{run_id}.pdf")
@@ -286,8 +310,6 @@ def image_gen_node(state: PipelineState) -> dict:
 
         result: dict = {"image_paths": image_paths, "current_step": "images_generated"}
 
-        # Carousel is generated separately so its failure never discards the
-        # news cards that were already produced above.
         try:
             carousel_result = _generate_carousel_pdf(summaries, run_id, env)
             if carousel_result:
