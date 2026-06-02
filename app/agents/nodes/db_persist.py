@@ -86,16 +86,18 @@ def persist_to_db_node(state: PipelineState) -> dict:
                             published_at=article.get("published_at"),
                             credibility_score=article.get("credibility_score", 0.0),
                             category=article.get("category", ""),
+                            story_cluster_id=article.get("story_cluster_id") or None,
                         )
                     )
                     article_count += 1
 
             # ── SummaryModel rows ────────────────────────────────────────────
+            import json as _json
+
             summary_count = 0
             for i, summary in enumerate(summaries):
                 summary_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{run_id}:summary:{i}"))
                 if session.get(SummaryModel, summary_id) is None:
-                    source_urls_json = __import__("json").dumps(summary.get("source_urls", []))
                     session.add(
                         SummaryModel(
                             id=summary_id,
@@ -104,7 +106,10 @@ def persist_to_db_node(state: PipelineState) -> dict:
                             body=summary.get("body", ""),
                             category=summary.get("category", "Other")[:50],
                             credibility_score=summary.get("credibility_score", 0.0),
-                            source_urls=source_urls_json,
+                            source_urls=_json.dumps(summary.get("source_urls", [])),
+                            outlet_names=_json.dumps(summary.get("outlet_names", [])),
+                            bias_notes=summary.get("bias_notes") or None,
+                            story_cluster_id=summary.get("story_cluster_id") or None,
                         )
                     )
                     summary_count += 1

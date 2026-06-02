@@ -33,6 +33,7 @@ from app.agents.nodes.scraper import (
 from app.agents.nodes.db_persist import persist_to_db_node
 from app.agents.nodes.summarizer import (
     analyze_node,
+    cluster_stories_node,
     deduplicate_node,
     summarize_node,
 )
@@ -91,6 +92,7 @@ def build_graph(checkpointer=None) -> StateGraph:
     workflow.add_node("deduplicate", deduplicate_node)
     workflow.add_node("credibility", credibility_node)
     workflow.add_node("analyze", analyze_node)
+    workflow.add_node("cluster_stories", cluster_stories_node)
     workflow.add_node("summarize", summarize_node)
     workflow.add_node("persist_to_db", persist_to_db_node)
 
@@ -117,7 +119,8 @@ def build_graph(checkpointer=None) -> StateGraph:
     workflow.add_edge("merge_results", "deduplicate")
     workflow.add_edge("deduplicate", "credibility")
     workflow.add_edge("credibility", "analyze")
-    workflow.add_edge("analyze", "summarize")
+    workflow.add_edge("analyze", "cluster_stories")
+    workflow.add_edge("cluster_stories", "summarize")
     workflow.add_edge("summarize", "persist_to_db")
     workflow.add_edge("persist_to_db", "linkedin_gen")
     workflow.add_edge("linkedin_gen", "image_gen")

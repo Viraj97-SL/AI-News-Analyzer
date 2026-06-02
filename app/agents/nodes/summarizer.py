@@ -134,10 +134,11 @@ def analyze_node(state: PipelineState) -> dict:
         messages = [
             SystemMessage(
                 content=(
-                    "You are an AI/ML news analyst. For each article below, output a JSON array "
+                    "You are a news analyst. For each article below, output a JSON array "
                     "where each element has: index (int), category (one of: LLM, Computer Vision, "
                     "Robotics, AI Policy, AI Startup, Research Paper, Industry News, Other), "
-                    "and relevance_score (0.0-1.0, how important this is for AI practitioners). "
+                    "and relevance_score (0.0-1.0, how significant this is for the general public). "
+                    "Prioritise stories with broad real-world impact over niche technical updates. "
                     "Output ONLY valid JSON, no markdown fences."
                 )
             ),
@@ -211,16 +212,22 @@ def _rank_score(article: dict) -> float:
 # ═══════════════════════════════════════════════════════════════
 # Summarization — generate newsletter-ready summaries
 # ═══════════════════════════════════════════════════════════════
-SUMMARIZE_SYSTEM_PROMPT = """You are a senior AI/ML journalist writing a weekly newsletter.
-For each article provided, write a detailed summary consisting of:
-1. A compelling headline (max 80 chars)
-2. A 3-5 sentence body that covers: the core announcement or finding, specific numbers/metrics/dates, \
-why it matters to engineers and researchers, and broader industry implications. \
-Include any funding amounts, model sizes, benchmark scores, or performance gains mentioned.
-3. Categorise as one of: LLM, Computer Vision, Robotics, AI Policy, AI Startup, Research, Industry
+SUMMARIZE_SYSTEM_PROMPT = """You are a news journalist writing a weekly AI briefing for a general audience.
+For each story provided, write a clear, jargon-free summary:
+1. headline: Punchy, plain-English headline (max 80 chars). No acronyms without explanation.
+2. body: 3-5 sentences covering what happened, key numbers or dates, why it matters in everyday terms, \
+and what changes as a result. Avoid terms like "LLM", "RLHF", or "inference" without a brief explanation.
+3. category: one of LLM, Computer Vision, Robotics, AI Policy, AI Startup, Research, Industry
+4. source_urls: JSON array of all article URLs that informed this summary (can be multiple)
+5. outlet_names: JSON array of up to 3 publication names (e.g. ["NYT", "Bloomberg", "Reuters"]) \
+extracted from the outlet field in the input articles
+6. bias_notes: If multiple outlets covered the same story with notably different angles or emphasis, \
+note the key difference in one sentence. Use "" if single source or angles are similar.
+7. credibility_score: 0.0–1.0 based on source quality
 
-Output a JSON array with objects: {headline, body, category, source_url, credibility_score}.
-Rank by importance — lead with the biggest story. Output ONLY valid JSON."""
+Output a JSON array of objects with exactly those 7 keys.
+Rank by public significance — lead with the story that affects the most people.
+Output ONLY valid JSON, no markdown."""
 
 
 def summarize_node(state: PipelineState) -> dict:
@@ -241,9 +248,24 @@ def summarize_node(state: PipelineState) -> dict:
         sorted_articles = sorted(articles, key=_rank_score, reverse=True)
         top_articles = sorted_articles[: settings.max_articles_per_run]
 
+        def _outlet_label(article: dict) -> str:
+            """Return a human-readable outlet name from the article URL."""
+            from urllib.parse import urlparse
+            try:
+                domain = urlparse(article.get("url", "")).netloc.lower().replace("www.", "")
+                # Use feed name embedded in rss source tag when available
+                src = article.get("source", "")
+                if src.startswith("rss:"):
+                    return src.replace("rss:", "").replace("_", " ").title()
+                parts = domain.split(".")
+                if len(parts) >= 2:
+                    return parts[-2].title()
+                return domain or "Unknown"
+            except Exception:
+                return "Unknown"
+
         article_context = "\n---\n".join(
-            f"Title: {a['title']}\nSource: {a['source']}\nURL: {a['url']}\n"
-            f"Credibility: {a['credibility_score']:.2f}\n"
+            f"Title: {a['title']}\nOutlet: {_outlet_label(a)}\nURL: {a['url']}\n"
             f"Content: {a['content'][:800]}"
             for a in top_articles
         )
@@ -282,7 +304,13 @@ def summarize_node(state: PipelineState) -> dict:
                 "headline": item.get("headline", ""),
                 "body": item.get("body", ""),
                 "category": item.get("category", "Industry"),
-                "source_urls": [item.get("source_url", "")],
+                # Accept both old single-url and new array format
+                "source_urls": (
+                    item["source_urls"] if isinstance(item.get("source_urls"), list)
+                    else [item.get("source_url") or item.get("source_urls") or ""]
+                ),
+                "outlet_names": item.get("outlet_names") or [],
+                "bias_notes": item.get("bias_notes") or "",
                 "credibility_score": float(item.get("credibility_score", 0.5)),
             }
             for item in parsed
@@ -294,3 +322,67 @@ def summarize_node(state: PipelineState) -> dict:
     except Exception as e:
         logger.error("summarize_error", error=str(e))
         return {"error_log": [f"Summarization error: {e}"], "current_step": "summarized"}
+
+
+# ═══════════════════════════════════════════════════════════════
+# Story Clustering — group articles by topic for cross-outlet analysis
+# ═══════════════════════════════════════════════════════════════
+_CLUSTER_SYSTEM_PROMPT = """You are a news editor. Group the articles below into story clusters —
+each cluster represents a single real-world news event or topic covered by multiple outlets.
+
+For each article assign a cluster_id (short slug like "openai-gpt5" or "eu-ai-act-fine").
+Articles about the same event from different outlets share the same cluster_id.
+Unrelated articles each get a unique cluster_id.
+
+Output a JSON array: [{index: int, cluster_id: str}].
+Output ONLY valid JSON."""
+
+
+def cluster_stories_node(state) -> dict:
+    """
+    Assign story cluster IDs to deduplicated articles using LLM grouping.
+    Articles about the same event across different outlets share a cluster_id.
+    Enriches each article with a 'story_cluster_id' field.
+    """
+    articles = state.get("deduplicated_articles", [])
+    if len(articles) < 2:
+        return {}
+
+    try:
+        llm = ChatGoogleGenerativeAI(
+            model=settings.model_classifier,
+            temperature=0,
+            google_api_key=settings.google_api_key,
+        )
+
+        batch = articles[:60]
+        article_list = "\n".join(
+            f"[{i}] {a['title']}" for i, a in enumerate(batch)
+        )
+
+        messages = [
+            SystemMessage(content=_CLUSTER_SYSTEM_PROMPT),
+            HumanMessage(content=article_list),
+        ]
+
+        response = llm.invoke(messages)
+        content = response.content
+        raw_text = content if isinstance(content, str) else "".join(
+            p.get("text", "") if isinstance(p, dict) else str(p) for p in content
+        )
+        raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text.strip())
+        raw_text = re.sub(r"\s*```$", "", raw_text).strip()
+
+        parsed: list[dict] = _parse_json_tolerant(raw_text)
+        enriched = list(articles)
+        for item in parsed:
+            idx = item.get("index")
+            if isinstance(idx, int) and idx < len(enriched):
+                enriched[idx] = {**enriched[idx], "story_cluster_id": item.get("cluster_id", "")}
+
+        logger.info("clustering_complete", clusters=len({a.get("story_cluster_id") for a in enriched}))
+        return {"deduplicated_articles": enriched, "current_step": "clustered"}
+
+    except Exception as e:
+        logger.warning("cluster_error", error=str(e))
+        return {}

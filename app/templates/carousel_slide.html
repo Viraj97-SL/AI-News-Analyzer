@@ -2,206 +2,249 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Carousel Slide</title>
+    <title>AI Brief Slide</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
         :root {
-            --blue:   #00f3ff;
-            --purple: #9d00ff;
-            --green:  #00ff9d;
-            --yellow: #ffe600;
-            --orange: #ff6b35;
-            --pink:   #ff2d78;
-            --bg:     #05050a;
+            --blue:    #3b82f6;
+            --purple:  #8b5cf6;
+            --green:   #10b981;
+            --amber:   #f59e0b;
+            --rose:    #f43f5e;
+            --cyan:    #06b6d4;
+            --bg:      #0a0a0f;
+            --surface: rgba(255,255,255,0.05);
+            --surface2: rgba(255,255,255,0.08);
+            --border:  rgba(255,255,255,0.09);
+            --border2: rgba(255,255,255,0.15);
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
-        body {
+        html, body {
             width: 1080px;
-            height: 1080px;
+            height: 1350px;
             font-family: 'Inter', sans-serif;
             background: var(--bg);
+            color: #fff;
             overflow: hidden;
-            position: relative;
         }
 
+        /* Subtle grid texture */
         body::before {
             content: "";
             position: absolute;
             inset: 0;
             background-image:
-                linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
-            background-size: 40px 40px;
+                linear-gradient(rgba(255,255,255,0.013) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.013) 1px, transparent 1px);
+            background-size: 54px 54px;
             z-index: 0;
+            pointer-events: none;
         }
 
         .slide {
             position: relative;
             width: 1080px;
-            height: 1080px;
+            height: 1350px;
             z-index: 1;
-            padding: 48px 56px;
+            padding: 52px 60px;
             display: flex;
             flex-direction: column;
         }
 
-        /* ══════════════════════════════════════
-           SHARED COMPONENTS
-        ══════════════════════════════════════ */
+        /* ── Logotype ─────────────────────────────────── */
+        .logotype {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-shrink: 0;
+        }
+        .logo-mark {
+            width: 52px;
+            height: 52px;
+            background: linear-gradient(135deg, var(--blue), var(--purple));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 18px;
+            letter-spacing: -0.5px;
+            color: #fff;
+            flex-shrink: 0;
+        }
+        .logo-text-wrap { display: flex; flex-direction: column; gap: 2px; }
+        .logo-name {
+            font-size: 23px;
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #fff;
+            line-height: 1;
+        }
+        .logo-sub {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.36);
+            line-height: 1;
+        }
 
+        /* ── Category chip ──────────────────────────────── */
         .chip {
             display: inline-flex;
             align-items: center;
-            padding: 10px 28px;
+            padding: 9px 22px;
             border-radius: 30px;
-            font-weight: 800;
-            font-size: 20px;
-            letter-spacing: 1.5px;
+            font-weight: 700;
+            font-size: 18px;
+            letter-spacing: 0.8px;
             text-transform: uppercase;
-        }
-
-        .chip-outline {
-            border: 1px solid rgba(0,243,255,0.5);
-            color: var(--blue);
-        }
-
-        .chip-solid {
-            background: linear-gradient(135deg, var(--blue), var(--purple));
             color: #fff;
-            box-shadow: 0 0 18px rgba(0,243,255,0.3);
         }
 
-        /* Progress dots */
-        .progress-dots {
-            display: flex;
-            gap: 9px;
-            align-items: center;
+        /* ── Divider ───────────────────────────────────── */
+        .divider {
+            height: 2px;
+            background: linear-gradient(90deg, var(--blue), var(--purple), transparent);
+            border-radius: 1px;
+            flex-shrink: 0;
         }
-        .progress-dot {
-            width: 13px;
-            height: 13px;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.15);
-        }
-        .progress-dot.done { background: var(--blue); }
 
-        /* Filled bar */
-        .bar-track {
-            height: 8px;
-            background: rgba(255,255,255,0.08);
-            border-radius: 4px;
-            overflow: hidden;
-        }
-        .bar-fill {
-            height: 100%;
-            border-radius: 4px;
-        }
-        .bar-fill.blue   { background: linear-gradient(90deg, var(--blue), var(--purple)); }
-        .bar-fill.green  { background: var(--green); }
-        .bar-fill.yellow { background: var(--yellow); }
-
-        /* Slide footer */
+        /* ── Slide footer ──────────────────────────────── */
         .slide-footer {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding-top: 18px;
-            border-top: 1px solid rgba(255,255,255,0.07);
-            margin-top: auto;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
             flex-shrink: 0;
+            margin-top: auto;
         }
-        .footer-brand {
+        .footer-left {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
         }
-        .footer-name  { font-size: 17px; color: var(--green); font-weight: 800; letter-spacing: 0.5px; }
-        .footer-handle { font-size: 15px; color: rgba(255,255,255,0.35); font-weight: 600; }
-        .footer-right { font-size: 18px; color: rgba(255,255,255,0.2); font-weight: 600; letter-spacing: 2px; text-transform: uppercase; }
+        .footer-logo-sm {
+            width: 34px;
+            height: 34px;
+            background: linear-gradient(135deg, var(--blue), var(--purple));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 12px;
+            color: #fff;
+            flex-shrink: 0;
+        }
+        .footer-brand-name { font-size: 17px; font-weight: 800; color: #fff; letter-spacing: 2px; text-transform: uppercase; }
+        .footer-handle { font-size: 14px; color: rgba(255,255,255,0.36); font-weight: 500; }
+        .footer-right { font-size: 16px; color: rgba(255,255,255,0.30); font-weight: 600; letter-spacing: 2px; text-transform: uppercase; }
 
-        /* ══════════════════════════════════════
+
+        /* ═══════════════════════════════════════════════════
            COVER SLIDE
-        ══════════════════════════════════════ */
-
+        ═══════════════════════════════════════════════════ */
         .cover {
             background:
-                radial-gradient(circle at 18% 28%, rgba(157,0,255,0.55) 0%, transparent 48%),
-                radial-gradient(circle at 82% 72%, rgba(0,243,255,0.38) 0%, transparent 48%),
+                radial-gradient(ellipse 72% 60% at 18% 28%, rgba(59,130,246,0.22) 0%, transparent 60%),
+                radial-gradient(ellipse 55% 52% at 82% 74%, rgba(139,92,246,0.18) 0%, transparent 58%),
                 var(--bg);
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            gap: 0;
+            justify-content: flex-start;
         }
 
-        .cover-top-chip { margin-bottom: 40px; }
+        .cover-logo-wrap { margin-bottom: 80px; }
+
+        .cover-eyebrow {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.38);
+            margin-bottom: 24px;
+        }
 
         .cover-number {
-            font-size: 160px;
+            font-size: 144px;
             font-weight: 900;
-            line-height: 1;
-            background: linear-gradient(135deg, var(--purple) 0%, var(--blue) 100%);
+            line-height: 0.88;
+            background: linear-gradient(140deg, var(--blue) 0%, var(--purple) 55%, rgba(255,255,255,0.85) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 12px;
+            letter-spacing: -4px;
         }
 
-        .cover-title {
-            font-size: 64px;
+        .cover-label {
+            font-size: 52px;
             font-weight: 900;
-            line-height: 1.15;
-            background: linear-gradient(to right, #fff 30%, #b8d0ff 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 20px;
+            line-height: 1.12;
+            color: #fff;
+            text-shadow: 0 2px 20px rgba(0,0,0,0.5);
+            margin-bottom: 12px;
         }
 
-        .cover-subtitle {
-            font-size: 26px;
-            color: rgba(255,255,255,0.45);
+        .cover-sub {
+            font-size: 24px;
+            font-weight: 500;
+            color: rgba(255,255,255,0.65);
             line-height: 1.5;
-            margin-bottom: 48px;
+            margin-bottom: 52px;
         }
 
-        .cover-date {
-            font-size: 22px;
-            color: rgba(255,255,255,0.28);
-            letter-spacing: 3px;
-            text-transform: uppercase;
-            margin-bottom: 28px;
+        .cover-date-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 26px;
+            border: 1px solid var(--border2);
+            border-radius: 40px;
+            font-size: 18px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.60);
+            letter-spacing: 0.3px;
+            margin-bottom: 24px;
+        }
+        .cover-date-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            flex-shrink: 0;
         }
 
         .cover-author {
-            font-size: 20px;
+            font-size: 18px;
+            font-weight: 600;
             color: var(--green);
-            font-weight: 700;
-            letter-spacing: 1px;
         }
 
         .swipe-hint {
             position: absolute;
-            bottom: 60px;
+            bottom: 72px;
             right: 68px;
-            font-size: 20px;
-            color: rgba(255,255,255,0.4);
             display: flex;
             align-items: center;
             gap: 10px;
-            letter-spacing: 1px;
+            font-size: 18px;
+            color: rgba(255,255,255,0.32);
+            font-weight: 600;
         }
-        .swipe-arrow { color: var(--blue); font-size: 26px; }
+        .swipe-arrow { color: var(--blue); font-size: 22px; }
 
-        /* ══════════════════════════════════════
+
+        /* ═══════════════════════════════════════════════════
            STORY SLIDE
-        ══════════════════════════════════════ */
-
+        ═══════════════════════════════════════════════════ */
         .story {
             background:
-                radial-gradient(circle at 90% 10%, rgba(157,0,255,0.28) 0%, transparent 42%),
-                radial-gradient(circle at 10% 90%, rgba(0,243,255,0.18) 0%, transparent 42%),
+                radial-gradient(ellipse 50% 40% at 94% 6%, rgba(139,92,246,0.14) 0%, transparent 50%),
+                radial-gradient(ellipse 40% 38% at 6% 94%, rgba(59,130,246,0.11) 0%, transparent 50%),
                 var(--bg);
         }
 
@@ -209,36 +252,35 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 32px;
+            margin-bottom: 24px;
             flex-shrink: 0;
+        }
+
+        .slide-counter {
+            font-size: 18px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.30);
+            letter-spacing: 1.5px;
         }
 
         .story-headline {
             font-size: 46px;
-            font-weight: 900;
-            line-height: 1.2;
-            background: linear-gradient(to right, #ffffff, #c5d5ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 28px;
+            font-weight: 800;
+            line-height: 1.18;
+            color: #fff;
+            text-shadow: 0 2px 14px rgba(0,0,0,0.55);
+            margin-bottom: 20px;
             flex-shrink: 0;
             word-break: break-word;
         }
 
-        .divider {
-            height: 2px;
-            background: linear-gradient(90deg, var(--blue), var(--purple), transparent);
-            border-radius: 1px;
-            margin-bottom: 32px;
-            flex-shrink: 0;
-        }
-
-        /* Two-column content area */
+        /* Two-column layout */
         .story-content {
             display: grid;
-            grid-template-columns: 1fr 340px;
-            gap: 32px;
+            grid-template-columns: 1fr 310px;
+            gap: 28px;
             flex-grow: 1;
+            margin-top: 20px;
             min-height: 0;
         }
 
@@ -246,50 +288,50 @@
         .key-points {
             display: flex;
             flex-direction: column;
-            gap: 18px;
-            overflow: hidden;
+            gap: 16px;
+            align-content: flex-start;
         }
 
         .key-point {
             display: flex;
             align-items: flex-start;
             gap: 16px;
-            background: rgba(255,255,255,0.035);
-            border: 1px solid rgba(255,255,255,0.07);
+            background: var(--surface);
+            border: 1px solid var(--border);
             border-left: 4px solid var(--blue);
             border-radius: 0 14px 14px 0;
             padding: 18px 22px;
         }
 
         .point-icon {
-            font-size: 20px;
+            font-size: 18px;
             flex-shrink: 0;
             margin-top: 4px;
             color: var(--blue);
+            font-weight: 700;
         }
 
         .point-text {
-            font-size: 26px;
-            line-height: 1.5;
-            color: rgba(255,255,255,0.88);
+            font-size: 27px;
+            line-height: 1.50;
+            color: rgba(255,255,255,0.92);
+            font-weight: 500;
         }
 
-        /* RIGHT: image + trust badge */
+        /* RIGHT column */
         .story-right {
             display: flex;
             flex-direction: column;
-            gap: 16px;
-            overflow: hidden;
+            gap: 14px;
         }
 
-        /* Story image */
         .story-image-wrap {
-            flex-grow: 1;
-            border-radius: 18px;
+            flex: 1;
+            border-radius: 16px;
             overflow: hidden;
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.08);
-            min-height: 0;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            min-height: 200px;
             position: relative;
         }
 
@@ -300,7 +342,6 @@
             display: block;
         }
 
-        /* Category-gradient fallback shown when no image */
         .story-image-fallback {
             width: 100%;
             height: 100%;
@@ -309,179 +350,160 @@
             justify-content: center;
         }
 
-        /* Key stat callout box */
+        /* Key stat callout */
         .stat-callout {
-            background: rgba(0,243,255,0.07);
-            border: 1px solid rgba(0,243,255,0.25);
-            border-radius: 18px;
-            padding: 24px 20px;
+            background: rgba(59,130,246,0.09);
+            border: 1px solid rgba(59,130,246,0.26);
+            border-radius: 14px;
+            padding: 20px 18px;
             text-align: center;
             flex-shrink: 0;
         }
-
-        .stat-callout-label {
-            font-size: 16px;
+        .stat-label {
+            font-size: 12px;
             font-weight: 700;
-            letter-spacing: 3px;
+            letter-spacing: 2.5px;
             text-transform: uppercase;
             color: var(--blue);
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
-
-        .stat-callout-value {
-            font-size: 56px;
+        .stat-value {
+            font-size: 44px;
             font-weight: 900;
             color: #fff;
             line-height: 1;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
-
-        .stat-callout-context {
-            font-size: 18px;
-            color: rgba(255,255,255,0.5);
+        .stat-context {
+            font-size: 14px;
+            color: rgba(255,255,255,0.58);
             line-height: 1.4;
         }
 
-        /* Trust badge */
-        .trust-badge {
+        /* Source / outlet badge */
+        .source-badge {
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 14px 18px;
-            border-radius: 14px;
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.1);
+            padding: 13px 16px;
+            border-radius: 12px;
+            background: var(--surface);
+            border: 1px solid var(--border);
             flex-shrink: 0;
         }
-
-        .trust-icon {
-            font-size: 20px;
-            flex-shrink: 0;
-        }
-
-        .trust-info {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .trust-label {
-            font-size: 19px;
-            font-weight: 800;
-            letter-spacing: 0.5px;
-        }
-
-        .trust-sources {
+        .source-icon { font-size: 15px; flex-shrink: 0; }
+        .source-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .source-names {
             font-size: 16px;
-            color: rgba(255,255,255,0.4);
-            font-weight: 600;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .source-tier {
+            font-size: 12px;
+            color: rgba(255,255,255,0.38);
+            font-weight: 500;
         }
 
-        /* ══════════════════════════════════════
-           CLOSING SLIDE
-        ══════════════════════════════════════ */
 
+        /* ═══════════════════════════════════════════════════
+           CLOSING SLIDE
+        ═══════════════════════════════════════════════════ */
         .closing {
             background:
-                radial-gradient(circle at 50% 38%, rgba(157,0,255,0.45) 0%, transparent 52%),
-                radial-gradient(circle at 82% 82%, rgba(0,243,255,0.28) 0%, transparent 46%),
+                radial-gradient(ellipse 65% 55% at 50% 38%, rgba(59,130,246,0.20) 0%, transparent 62%),
+                radial-gradient(ellipse 45% 42% at 82% 82%, rgba(139,92,246,0.14) 0%, transparent 55%),
                 var(--bg);
             justify-content: center;
             align-items: center;
             text-align: center;
-            gap: 32px;
+            gap: 36px;
         }
 
-        .closing-icon { font-size: 84px; line-height: 1; }
+        .closing-icon { font-size: 72px; line-height: 1; }
 
         .closing-question {
-            font-size: 52px;
+            font-size: 50px;
             font-weight: 900;
-            line-height: 1.3;
-            background: linear-gradient(135deg, #fff 0%, var(--blue) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            max-width: 880px;
+            line-height: 1.22;
+            color: #fff;
+            text-shadow: 0 2px 24px rgba(59,130,246,0.35);
+            max-width: 860px;
         }
 
         .closing-sub {
-            font-size: 26px;
-            color: rgba(255,255,255,0.5);
-            line-height: 1.6;
-            max-width: 720px;
+            font-size: 23px;
+            color: rgba(255,255,255,0.62);
+            line-height: 1.62;
+            max-width: 700px;
         }
 
-        .closing-follow {
+        .closing-cta {
             display: flex;
             align-items: center;
-            gap: 16px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(0,243,255,0.3);
+            gap: 14px;
+            background: var(--surface);
+            border: 1px solid rgba(59,130,246,0.32);
             border-radius: 50px;
-            padding: 20px 48px;
+            padding: 18px 44px;
         }
+        .closing-cta-text { font-size: 24px; color: #fff; font-weight: 700; }
 
-        .closing-follow-text { font-size: 26px; color: #fff; font-weight: 700; }
-
-        .closing-author {
-            font-size: 22px;
-            color: var(--green);
-            font-weight: 700;
-            letter-spacing: 0.5px;
-        }
-
-        .closing-handle {
-            font-size: 20px;
-            color: rgba(255,255,255,0.3);
-        }
+        .closing-author { font-size: 20px; color: var(--green); font-weight: 700; }
+        .closing-handle { font-size: 17px; color: rgba(255,255,255,0.32); }
     </style>
 </head>
 <body>
 
-{# ══════════════════════════════════════════════════════════
+{# ═══════════════════════════════════════════════════════════
    COVER SLIDE
-══════════════════════════════════════════════════════════ #}
+═══════════════════════════════════════════════════════════ #}
 {% if slide_type == "cover" %}
 <div class="slide cover">
-    <div class="chip chip-outline cover-top-chip">AI Intelligence Brief</div>
-    <div class="cover-number">{{ story_count }}</div>
-    <div class="cover-title">AI Stories That<br>Matter This Week</div>
-    <div class="cover-subtitle">Curated &amp; ranked for engineers and researchers</div>
-    <div class="cover-date">{{ date_str }}</div>
-    <div class="cover-author">Viraj Bulugahapitiya · AI Engineer · linkedin.com/in/viraj97</div>
-    <div class="swipe-hint">Swipe to explore <span class="swipe-arrow">→</span></div>
-</div>
 
-
-{# ══════════════════════════════════════════════════════════
-   STORY SLIDE
-══════════════════════════════════════════════════════════ #}
-{% elif slide_type == "story" %}
-<div class="slide story">
-
-    {# Top bar: category chip + progress counter #}
-    <div class="story-topbar">
-        <div class="chip chip-solid" style="background: linear-gradient(135deg, {{ category_color }}, {{ category_color }}aa);">{{ category }}</div>
-        <div style="display:flex; align-items:center; gap:16px;">
-            <div class="progress-dots">
-                {% for i in range([total_slides, 8]|min) %}
-                <div class="progress-dot {{ 'done' if i < slide_num else '' }}"></div>
-                {% endfor %}
-            </div>
-            <div style="font-size:20px; color:rgba(255,255,255,0.3); font-weight:700; letter-spacing:2px;">
-                {{ slide_num }}/{{ total_slides }}
-            </div>
+    <div class="logotype cover-logo-wrap">
+        <div class="logo-mark">AI</div>
+        <div class="logo-text-wrap">
+            <div class="logo-name">AI Brief</div>
+            <div class="logo-sub">Weekly Intelligence</div>
         </div>
     </div>
 
-    {# Headline #}
+    <div class="cover-eyebrow">This Week in AI</div>
+    <div class="cover-number">{{ story_count }}</div>
+    <div class="cover-label">Stories That<br>Matter</div>
+    <div class="cover-sub">What's happening in AI — explained simply.</div>
+
+    <div class="cover-date-pill">
+        <span class="cover-date-dot"></span>
+        {{ date_str }}
+    </div>
+
+    <div class="cover-author">Viraj Bulugahapitiya · linkedin.com/in/viraj97</div>
+
+    <div class="swipe-hint">Swipe to read <span class="swipe-arrow">→</span></div>
+</div>
+
+
+{# ═══════════════════════════════════════════════════════════
+   STORY SLIDE
+═══════════════════════════════════════════════════════════ #}
+{% elif slide_type == "story" %}
+<div class="slide story">
+
+    <div class="story-topbar">
+        <div class="chip" style="background: linear-gradient(135deg, {{ category_color }}, {{ category_color }}99);">{{ category }}</div>
+        <div class="slide-counter">{{ slide_num }} / {{ total_slides }}</div>
+    </div>
+
     <div class="story-headline">{{ headline }}</div>
     <div class="divider"></div>
 
-    {# Two-column content #}
     <div class="story-content">
 
-        {# LEFT — bullet points (max 3) #}
+        {# LEFT: bullet points #}
         <div class="key-points">
             {% for point in key_points %}
             <div class="key-point">
@@ -493,39 +515,42 @@
             {% endfor %}
         </div>
 
-        {# RIGHT — article image + key stat + trust badge #}
+        {# RIGHT: image + stat + source badge #}
         <div class="story-right">
 
-            {# Article image (real OG photo or Serper fallback, else category gradient) #}
             <div class="story-image-wrap">
                 {% if story_image_uri %}
                 <img class="story-image" src="{{ story_image_uri }}" alt=""/>
                 {% else %}
-                <div class="story-image-fallback" style="background: linear-gradient(145deg, {{ category_color }}22, {{ category_color }}08);">
-                    <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
-                        <circle cx="40" cy="40" r="36" stroke="{{ category_color }}" stroke-width="2" stroke-dasharray="6 4" opacity="0.4"/>
-                        <circle cx="40" cy="40" r="22" stroke="{{ category_color }}" stroke-width="1.5" opacity="0.25"/>
-                        <circle cx="40" cy="40" r="8" fill="{{ category_color }}" opacity="0.3"/>
+                <div class="story-image-fallback" style="background: linear-gradient(145deg, {{ category_color }}18, {{ category_color }}07);">
+                    <svg width="70" height="70" viewBox="0 0 70 70" fill="none">
+                        <circle cx="35" cy="35" r="31" stroke="{{ category_color }}" stroke-width="1.5" stroke-dasharray="5 4" opacity="0.32"/>
+                        <circle cx="35" cy="35" r="18" stroke="{{ category_color }}" stroke-width="1" opacity="0.18"/>
+                        <circle cx="35" cy="35" r="7" fill="{{ category_color }}" opacity="0.22"/>
                     </svg>
                 </div>
                 {% endif %}
             </div>
 
-            {# Key stat callout — only shown if a stat was found #}
             {% if key_stat %}
             <div class="stat-callout">
-                <div class="stat-callout-label">Key Stat</div>
-                <div class="stat-callout-value">{{ key_stat.value }}</div>
-                <div class="stat-callout-context">{{ key_stat.label }}</div>
+                <div class="stat-label">Key Stat</div>
+                <div class="stat-value">{{ key_stat.value }}</div>
+                <div class="stat-context">{{ key_stat.label }}</div>
             </div>
             {% endif %}
 
-            {# Trust badge — replaces the old credibility percentage #}
-            <div class="trust-badge">
-                <span class="trust-icon" style="color: {{ trust_tier.color }};">{{ trust_tier.icon }}</span>
-                <div class="trust-info">
-                    <span class="trust-label" style="color: {{ trust_tier.color }};">{{ trust_tier.label }}</span>
-                    <span class="trust-sources">{{ source_count }} outlet{{ 's' if source_count != 1 else '' }}</span>
+            <div class="source-badge">
+                <span class="source-icon" style="color: {{ trust_tier.color }};">{{ trust_tier.icon }}</span>
+                <div class="source-info">
+                    <span class="source-names" style="color: {{ trust_tier.color }};">
+                        {%- if outlet_names -%}
+                            {{ outlet_names | join(' · ') }}
+                        {%- else -%}
+                            {{ trust_tier.label }}
+                        {%- endif -%}
+                    </span>
+                    <span class="source-tier">{{ source_count }} source{{ 's' if source_count != 1 else '' }}</span>
                 </div>
             </div>
 
@@ -533,31 +558,32 @@
     </div>
 
     <div class="slide-footer">
-        <div class="footer-brand">
-            <span class="footer-name">Viraj Bulugahapitiya · AI Engineer</span>
+        <div class="footer-left">
+            <div class="footer-logo-sm">AI</div>
+            <span class="footer-brand-name">AI Brief</span>
             <span class="footer-handle">linkedin.com/in/viraj97</span>
         </div>
-        <div class="footer-right">AI Intelligence Brief</div>
+        <div class="footer-right">Viraj B.</div>
     </div>
 </div>
 
 
-{# ══════════════════════════════════════════════════════════
+{# ═══════════════════════════════════════════════════════════
    CLOSING SLIDE
-══════════════════════════════════════════════════════════ #}
+═══════════════════════════════════════════════════════════ #}
 {% elif slide_type == "closing" %}
 <div class="slide closing">
     <div class="closing-icon">💡</div>
     <div class="closing-question">Which story surprised<br>you the most?</div>
     <div class="closing-sub">
-        Drop your answer in the comments — I read every reply.<br>
+        Drop your take in the comments — I read every one.<br>
         Full links are pinned in the first comment.
     </div>
-    <div class="closing-follow">
-        <span style="font-size:28px">🔔</span>
-        <span class="closing-follow-text">Follow for weekly AI intelligence</span>
+    <div class="closing-cta">
+        <span style="font-size:26px">🔔</span>
+        <span class="closing-cta-text">Follow for weekly AI news</span>
     </div>
-    <div class="closing-author">Viraj Bulugahapitiya · AI Engineer</div>
+    <div class="closing-author">Viraj Bulugahapitiya</div>
     <div class="closing-handle">linkedin.com/in/viraj97</div>
 </div>
 {% endif %}

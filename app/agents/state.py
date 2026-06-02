@@ -20,6 +20,7 @@ class NewsArticle(TypedDict):
     credibility_score: float  # 0.0-1.0, populated by credibility node
     category: NotRequired[str]  # populated by analyze_node
     relevance_score: NotRequired[float]  # 0.0-1.0, populated by analyze_node
+    story_cluster_id: NotRequired[str]  # populated by cluster_stories_node
 
 
 class Summary(TypedDict):
@@ -28,6 +29,9 @@ class Summary(TypedDict):
     category: str  # e.g. "LLM", "Computer Vision", "Robotics", "Policy"
     source_urls: list[str]
     credibility_score: float
+    outlet_names: NotRequired[list[str]]  # e.g. ["NYT", "Bloomberg"] — shown in carousel
+    bias_notes: NotRequired[str]  # cross-outlet angle differences
+    story_cluster_id: NotRequired[str]  # links back to article cluster
 
 
 class PipelineState(TypedDict):

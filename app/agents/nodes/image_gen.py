@@ -19,6 +19,7 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 import httpx
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -35,16 +36,67 @@ settings = get_settings()
 OUTPUT_DIR = Path("./output/images")
 TEMPLATE_DIR = Path(__file__).parent.parent.parent / "templates"
 
-# Color palette for categories (matches template CSS vars)
+# Color palette updated to match new editorial theme
 CATEGORY_COLORS: dict[str, str] = {
-    "LLM":             "#00f3ff",
-    "Computer Vision": "#ffe600",
-    "Robotics":        "#ff2d78",
-    "AI Policy":       "#ff6b35",
-    "AI Startup":      "#00ff9d",
-    "Research":        "#9d00ff",
-    "Industry":        "#7ec8ff",
-    "Other":           "#888888",
+    "LLM":             "#3b82f6",
+    "Computer Vision": "#f59e0b",
+    "Robotics":        "#f43f5e",
+    "AI Policy":       "#f97316",
+    "AI Startup":      "#10b981",
+    "Research":        "#8b5cf6",
+    "Industry":        "#06b6d4",
+    "Other":           "#6b7280",
+}
+
+# Domain → short display name shown in carousel source badge
+DOMAIN_DISPLAY_NAMES: dict[str, str] = {
+    # Tier 1 — major newspapers / wire
+    "nytimes.com":          "NYT",
+    "washingtonpost.com":   "WashPost",
+    "wsj.com":              "WSJ",
+    "ft.com":               "FT",
+    "economist.com":        "Economist",
+    "bloomberg.com":        "Bloomberg",
+    "reuters.com":          "Reuters",
+    "apnews.com":           "AP",
+    "bbc.com":              "BBC",
+    "bbc.co.uk":            "BBC",
+    "theguardian.com":      "Guardian",
+    # Tier 2 — tech journalism
+    "techcrunch.com":       "TechCrunch",
+    "venturebeat.com":      "VentureBeat",
+    "theverge.com":         "The Verge",
+    "wired.com":            "Wired",
+    "arstechnica.com":      "Ars Technica",
+    "technologyreview.com": "MIT Tech Review",
+    "zdnet.com":            "ZDNet",
+    "cnet.com":             "CNET",
+    "engadget.com":         "Engadget",
+    "ieee.org":             "IEEE",
+    "thenewstack.io":       "The New Stack",
+    "infoq.com":            "InfoQ",
+    # Tier 3 — AI labs / companies
+    "openai.com":           "OpenAI",
+    "anthropic.com":        "Anthropic",
+    "deepmind.google":      "DeepMind",
+    "deepmind.com":         "DeepMind",
+    "blog.google":          "Google",
+    "ai.googleblog.com":    "Google AI",
+    "huggingface.co":       "HuggingFace",
+    "mistral.ai":           "Mistral",
+    "meta.com":             "Meta",
+    "ai.meta.com":          "Meta AI",
+    "blogs.microsoft.com":  "Microsoft",
+    "blogs.nvidia.com":     "NVIDIA",
+    # Tier 4 — research
+    "arxiv.org":            "arXiv",
+    "nature.com":           "Nature",
+    "science.org":          "Science",
+    "openreview.net":       "OpenReview",
+    # Tier 5 — newsletters / blogs
+    "towardsdatascience.com": "TDS",
+    "deeplearning.ai":      "DeepLearning.AI",
+    "simonwillison.net":    "Simon Willison",
 }
 
 # Patterns to extract a key stat/number from a body string.
@@ -73,8 +125,8 @@ def _extract_key_stat(body: str) -> dict | None:
 
 def _extract_key_points(body: str) -> list[str]:
     """
-    Split a summary body into up to 3 bullet points that always end at a natural
-    boundary (sentence end, comma, or word boundary) — never mid-word or mid-idea.
+    Split a summary body into up to 3 bullet points, each ending at a complete
+    sentence boundary. Never cuts mid-sentence or mid-word.
     """
     sentences = re.split(r"(?<=[.!?])\s+", body.strip())
     points: list[str] = []
@@ -82,34 +134,74 @@ def _extract_key_points(body: str) -> list[str]:
         s = s.strip()
         if len(s) < 20:
             continue
-        if len(s) <= 145:
+        if len(s) <= 190:
             points.append(s)
         else:
-            chunk = s[:145]
-            # Prefer ending at a sentence-boundary punctuation within the chunk
+            # Try to end at a sentence-end within the first 190 chars
+            chunk = s[:190]
             cut = -1
-            for punct in [". ", ", ", "; "]:
+            for punct in [". ", "! ", "? "]:
                 idx = chunk.rfind(punct)
                 if idx > 60:
-                    cut = idx + len(punct) - 1
+                    cut = idx + 1  # include the punctuation
                     break
             if cut == -1:
-                # Fall back to last word boundary
+                # Fall back to last comma or semicolon
+                for punct in [", ", "; "]:
+                    idx = chunk.rfind(punct)
+                    if idx > 60:
+                        cut = idx
+                        break
+            if cut == -1:
                 cut = chunk.rfind(" ")
-            points.append(s[: cut].rstrip(" .,") + "…" if cut > 60 else chunk.rstrip() + "…")
+            if cut > 60:
+                points.append(s[:cut].rstrip(" .,") + "…")
+            else:
+                points.append(chunk.rstrip() + "…")
         if len(points) == 3:
             break
     return points
 
 
 def _credibility_tier(score: float, source_count: int) -> dict:
-    """Map internal credibility score to an honest, display-safe trust badge."""
+    """Map credibility score to a display-safe trust badge."""
     if score >= 0.75:
-        return {"label": "Major Outlets", "color": "#00ff9d", "icon": "◉"}
+        return {"label": "Major Outlets", "color": "#10b981", "icon": "◉"}
     elif score >= 0.55:
-        return {"label": "Press Coverage", "color": "#ffe600", "icon": "◎"}
+        return {"label": "Press Coverage", "color": "#f59e0b", "icon": "◎"}
     else:
-        return {"label": "Emerging Story", "color": "#888888", "icon": "○"}
+        return {"label": "Emerging Story", "color": "#6b7280", "icon": "○"}
+
+
+def _outlet_names_from_urls(source_urls: list[str]) -> list[str]:
+    """
+    Extract up to 3 recognisable publication names from article URLs.
+    Falls back to the bare domain if no display name is registered.
+    """
+    names: list[str] = []
+    seen: set[str] = set()
+    for url in source_urls:
+        if not url:
+            continue
+        try:
+            domain = urlparse(url).netloc.lower().replace("www.", "")
+        except Exception:
+            continue
+        # Exact match first, then parent domain
+        name = DOMAIN_DISPLAY_NAMES.get(domain)
+        if not name:
+            parts = domain.split(".")
+            if len(parts) > 2:
+                name = DOMAIN_DISPLAY_NAMES.get(".".join(parts[-2:]))
+        if not name:
+            # Use cleaned domain as fallback (e.g. "techcrunch" from techcrunch.com)
+            name = domain.split(".")[0].title() if domain else None
+        if name and name not in seen:
+            seen.add(name)
+            names.append(name)
+        if len(names) == 3:
+            break
+    return names
 
 
 def _download_image_data_uri(image_url: str) -> str | None:
@@ -270,15 +362,15 @@ def _generate_cards(summaries: list[dict], run_id: str, env: Environment) -> lis
 
 def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment) -> tuple[str, list[str]] | None:
     """
-    Render infographic carousel slides and combine into a single PDF.
+    Render infographic carousel slides (portrait 1080×1350) and combine into a PDF.
 
     Slide order:
       1  Cover     — story count + date + author branding
-      2… Stories   — headline, 3 bullets, real article photo, trust badge
+      2… Stories   — headline, 3 bullets, real article photo, source names
       N  Closing   — CTA + follow prompt
     """
     template = env.get_template("carousel_slide.html")
-    hti = _make_hti((1080, 1080))
+    hti = _make_hti((1080, 1350))  # portrait 4:5 — better for LinkedIn mobile
 
     story_summaries = summaries[:8]
     total_slides = len(story_summaries)
@@ -312,6 +404,7 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
         else:
             logger.debug("story_image_fallback", slide=i)
 
+        outlet_names = _outlet_names_from_urls(source_urls)
         html = template.render(
             slide_type="story",
             slide_num=i + 1,
@@ -324,6 +417,7 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
             story_image_uri=story_image_uri,
             trust_tier=_credibility_tier(cred_score, source_count),
             source_count=source_count,
+            outlet_names=outlet_names,
         )
         name = f"carousel_{run_id}_{i}.png"
         hti.screenshot(html_str=html, save_as=name)
