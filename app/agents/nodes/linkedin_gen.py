@@ -16,6 +16,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 if TYPE_CHECKING:
     from app.agents.state import PipelineState
 
+from app.agents.nodes.image_gen import CAROUSEL_STORY_COUNT
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
@@ -60,7 +61,7 @@ STRUCTURE  (in this exact order)
    • Use the "1/ … 2/ … 3/ …" format — one story per numbered item.
    • Each item: ≤ 3 lines. Lead with the key insight, add ONE specific number or name.
    • Blank line between each numbered item for mobile readability.
-   • Cover 4-7 stories.
+   • Cover all stories provided (exactly the stories in the input, no more, no less).
 
 6. [blank line]
 
@@ -112,10 +113,10 @@ def linkedin_gen_node(state: PipelineState) -> dict:
                 f"Headline: {s.get('headline', 'N/A')}\n"
                 f"Body: {s.get('body', 'N/A')}\n"
                 f"Category: {s.get('category', 'N/A')}"
-                for s in summaries[:7]
+                for s in summaries[:CAROUSEL_STORY_COUNT]
             )
         else:
-            articles = state.get("deduplicated_articles", [])[:7]
+            articles = state.get("deduplicated_articles", [])[:CAROUSEL_STORY_COUNT]
             context = "\n---\n".join(
                 f"Title: {a['title']}\nContent: {a['content'][:300]}" for a in articles
             )

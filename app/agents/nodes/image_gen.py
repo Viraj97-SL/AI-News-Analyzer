@@ -3,11 +3,11 @@ Image generation node — news cards + LinkedIn carousel PDF via html2image.
 
 Produces:
   - 1200x627px individual news cards (used in email newsletter)
-  - 1080x1080px carousel slides combined into a PDF (LinkedIn document post)
+  - 1080x1350px portrait carousel slides combined into a PDF (LinkedIn document post)
 
 Carousel slide order:
-  1. Cover  — story count + date + author branding
-  2. Story × N — headline + 3 bullet points + real article image + trust badge
+  1. Cover  — story count + date + topic tags + source count
+  2. Story × N — headline + 3 bullet points + image + source names + credibility bar
   3. Closing — CTA + follow prompt
 """
 
@@ -35,6 +35,10 @@ settings = get_settings()
 
 OUTPUT_DIR = Path("./output/images")
 TEMPLATE_DIR = Path(__file__).parent.parent.parent / "templates"
+
+# Single source of truth for how many stories appear in the carousel AND the LinkedIn post.
+# Changing this one constant keeps both in sync.
+CAROUSEL_STORY_COUNT = 7
 
 # Color palette updated to match new editorial theme
 CATEGORY_COLORS: dict[str, str] = {
@@ -202,6 +206,72 @@ def _outlet_names_from_urls(source_urls: list[str]) -> list[str]:
         if len(names) == 3:
             break
     return names
+
+
+def _bias_distribution(source_urls: list[str]) -> dict:
+    """
+    Compute the political lean distribution of a story's sources using DOMAIN_BIAS.
+    Returns counts for left / center / right / unknown and a summary label.
+    Based on AllSides / Ad Fontes media bias ratings.
+    """
+    from app.agents.nodes.credibility import DOMAIN_BIAS
+
+    counts: dict[str, int] = {"left": 0, "center-left": 0, "center": 0, "center-right": 0, "right": 0, "unknown": 0}
+    for url in source_urls:
+        if not url:
+            continue
+        try:
+            domain = urlparse(url).netloc.lower().replace("www.", "")
+        except Exception:
+            continue
+        bias = DOMAIN_BIAS.get(domain)
+        if not bias:
+            parts = domain.split(".")
+            if len(parts) > 2:
+                bias = DOMAIN_BIAS.get(".".join(parts[-2:]))
+        counts[bias or "unknown"] = counts.get(bias or "unknown", 0) + 1
+
+    total = sum(counts.values()) or 1
+    left_n  = counts["left"] + counts["center-left"]
+    center_n = counts["center"]
+    right_n  = counts["center-right"] + counts["right"]
+    unknown_n = counts["unknown"]
+
+    # Summary label
+    known = left_n + center_n + right_n
+    if known == 0:
+        summary = "Independent sources"
+    elif center_n / total >= 0.6:
+        summary = "Center-dominant"
+    elif left_n > right_n and left_n / total >= 0.4:
+        summary = "Left-leaning mix"
+    elif right_n > left_n and right_n / total >= 0.4:
+        summary = "Right-leaning mix"
+    else:
+        summary = "Balanced coverage"
+
+    return {
+        "left": left_n,
+        "center": center_n,
+        "right": right_n,
+        "unknown": unknown_n,
+        "total": total,
+        # Percentages for the CSS flex bar widths (min 8% so segments are visible)
+        "left_pct":    max(8, round(left_n / total * 100))   if left_n   else 0,
+        "center_pct":  max(8, round(center_n / total * 100)) if center_n else 0,
+        "right_pct":   max(8, round(right_n / total * 100))  if right_n  else 0,
+        "summary": summary,
+    }
+
+
+def _reliability_label(pct: int) -> str:
+    if pct >= 80:
+        return "High credibility"
+    if pct >= 60:
+        return "Good credibility"
+    if pct >= 45:
+        return "Mixed sources"
+    return "Emerging story"
 
 
 def _download_image_data_uri(image_url: str) -> str | None:
@@ -372,16 +442,34 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
     template = env.get_template("carousel_slide.html")
     hti = _make_hti((1080, 1350))  # portrait 4:5 — better for LinkedIn mobile
 
-    story_summaries = summaries[:8]
+    story_summaries = summaries[:CAROUSEL_STORY_COUNT]
     total_slides = len(story_summaries)
     date_str = date.today().strftime("%B %d, %Y")
     slide_pngs: list[str] = []
+
+    # Pre-compute cover-slide extras from all summaries
+    cover_topics: list[str] = sorted({
+        s.get("category", "")
+        for s in story_summaries
+        if s.get("category") and s.get("category") not in ("Other", "")
+    })[:5]
+    if not cover_topics:
+        cover_topics = ["AI", "Technology"]
+
+    all_source_urls = [url for s in story_summaries for url in s.get("source_urls", []) if url]
+    total_source_count = len({
+        urlparse(u).netloc.lower().replace("www.", "")
+        for u in all_source_urls
+        if u
+    })
 
     # ── 1. Cover slide ────────────────────────────────────────
     html = template.render(
         slide_type="cover",
         story_count=total_slides,
         date_str=date_str,
+        cover_topics=cover_topics,
+        total_source_count=total_source_count,
     )
     name = f"carousel_{run_id}_cover.png"
     hti.screenshot(html_str=html, save_as=name)
@@ -405,6 +493,8 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
             logger.debug("story_image_fallback", slide=i)
 
         outlet_names = _outlet_names_from_urls(source_urls)
+        bias_dist = _bias_distribution(source_urls)
+        reliability_pct = int(cred_score * 100)
         html = template.render(
             slide_type="story",
             slide_num=i + 1,
@@ -418,6 +508,9 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
             trust_tier=_credibility_tier(cred_score, source_count),
             source_count=source_count,
             outlet_names=outlet_names,
+            bias_dist=bias_dist,
+            reliability_pct=reliability_pct,
+            reliability_label=_reliability_label(reliability_pct),
         )
         name = f"carousel_{run_id}_{i}.png"
         hti.screenshot(html_str=html, save_as=name)

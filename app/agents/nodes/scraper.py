@@ -67,6 +67,16 @@ _TAVILY_QUERIES = [
     "AI ML engineer hiring salary job market trends",
     "AI research paper state of the art SOTA benchmark",
     "AI conference NeurIPS ICML announcement highlight",
+    # ── Mainstream / broad audience angles ───────────────────
+    "artificial intelligence news BBC Reuters Guardian",
+    "AI news New York Times Bloomberg Wall Street Journal",
+    "AI impact jobs economy workers automation",
+    "AI consumer products apps everyday use",
+    "AI business enterprise productivity adoption",
+    "AI government public sector deployment",
+    "AI news Asia China India technology",
+    "AI deepfake misinformation election media",
+    "AI company layoffs restructuring investment",
 ]
 
 
@@ -144,33 +154,49 @@ def scrape_tavily_node(state: PipelineState) -> dict:
 # ═══════════════════════════════════════════════════════════════
 RSS_FEEDS = [
     # ── Core tech journalism ──────────────────────────────────
-    ("TechCrunch AI", "https://techcrunch.com/category/artificial-intelligence/feed/"),
-    ("VentureBeat AI", "https://venturebeat.com/category/ai/feed/"),
-    ("The Verge AI", "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"),
-    ("MIT Tech Review", "https://www.technologyreview.com/feed/"),
-    ("Wired AI", "https://www.wired.com/feed/tag/artificial-intelligence/latest/rss"),
-    ("Ars Technica AI", "https://feeds.arstechnica.com/arstechnica/technology-lab"),
+    ("TechCrunch AI",       "https://techcrunch.com/category/artificial-intelligence/feed/"),
+    ("VentureBeat AI",      "https://venturebeat.com/category/ai/feed/"),
+    ("The Verge AI",        "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"),
+    ("MIT Tech Review",     "https://www.technologyreview.com/feed/"),
+    ("Wired AI",            "https://www.wired.com/feed/tag/artificial-intelligence/latest/rss"),
+    ("Ars Technica AI",     "https://feeds.arstechnica.com/arstechnica/technology-lab"),
+    ("ZDNet AI",            "https://www.zdnet.com/topic/artificial-intelligence/rss.xml"),
+    ("Engadget AI",         "https://www.engadget.com/tag/artificial-intelligence/rss.xml"),
+    ("The Register AI",     "https://www.theregister.com/software/artificial_intelligence/headlines.atom"),
+    ("TechRadar AI",        "https://www.techradar.com/rss"),
+    ("The Next Web",        "https://thenextweb.com/feed/"),
+    ("CNET AI",             "https://www.cnet.com/rss/news/"),
+    ("PCMag Tech",          "https://feeds.pcmag.com/rss/pcmag-latest"),
+    # ── Major news outlets (AI/tech coverage) ────────────────
+    ("BBC Technology",      "https://feeds.bbci.co.uk/news/technology/rss.xml"),
+    ("Reuters Technology",  "https://feeds.reuters.com/reuters/technologyNews"),
+    ("Guardian Tech",       "https://www.theguardian.com/uk/technology/rss"),
+    ("CNBC Tech",           "https://search.cnbc.com/rs/search/combinedcomplexquery.xml?partnerId=wrss01&id=19854910"),
+    ("Forbes AI",           "https://www.forbes.com/ai/feed/"),
+    ("Fortune Tech",        "https://fortune.com/feed/fortune-feeds/?id=3230629"),
+    ("Axios AI",            "https://api.axios.com/feed/"),
+    ("Newsweek Tech",       "https://www.newsweek.com/rss"),
     # ── AI-specific blogs & research (major labs) ────────────
-    ("Google AI Blog", "https://blog.google/technology/ai/rss/"),
-    ("OpenAI News", "https://openai.com/news/rss.xml"),
-    ("Hugging Face Blog", "https://huggingface.co/blog/feed.xml"),
-    ("DeepMind Blog", "https://deepmind.google/blog/rss/"),
-    ("Meta AI Blog", "https://ai.meta.com/blog/rss/"),
-    ("Microsoft AI Blog", "https://blogs.microsoft.com/ai/feed/"),
-    ("NVIDIA AI Blog", "https://blogs.nvidia.com/feed/"),
-    ("Anthropic News", "https://www.anthropic.com/rss.xml"),
+    ("Google AI Blog",      "https://blog.google/technology/ai/rss/"),
+    ("OpenAI News",         "https://openai.com/news/rss.xml"),
+    ("Hugging Face Blog",   "https://huggingface.co/blog/feed.xml"),
+    ("DeepMind Blog",       "https://deepmind.google/blog/rss/"),
+    ("Meta AI Blog",        "https://ai.meta.com/blog/rss/"),
+    ("Microsoft AI Blog",   "https://blogs.microsoft.com/ai/feed/"),
+    ("NVIDIA AI Blog",      "https://blogs.nvidia.com/feed/"),
+    ("Anthropic News",      "https://www.anthropic.com/rss.xml"),
+    ("AWS ML Blog",         "https://aws.amazon.com/blogs/machine-learning/feed/"),
     # ── MLOps, engineering & developer tools ──────────────────
-    ("LangChain Blog", "https://blog.langchain.dev/rss/"),
-    ("Weights & Biases Blog", "https://wandb.ai/fully-connected/rss.xml"),
-    ("MLflow Blog", "https://mlflow.org/blog/feed.xml"),
+    ("LangChain Blog",      "https://blog.langchain.dev/rss/"),
+    ("Weights & Biases",    "https://wandb.ai/fully-connected/rss.xml"),
     ("Towards Data Science", "https://towardsdatascience.com/feed"),
-    ("The Batch (deeplearning.ai)", "https://www.deeplearning.ai/the-batch/feed/"),
+    ("The Batch",           "https://www.deeplearning.ai/the-batch/feed/"),
     # ── Policy, safety & broader impact ──────────────────────
-    ("AI Snake Oil", "https://www.aisnakeoil.com/feed"),
-    ("Import AI", "https://jack-clark.net/feed/"),
-    ("One Useful Thing (Ethan Mollick)", "https://www.oneusefulthing.org/feed"),
-    ("Simon Willison's Weblog", "https://simonwillison.net/atom/everything/"),
-    # ── UK & Europe focused ──────────────────────────────────
+    ("AI Snake Oil",        "https://www.aisnakeoil.com/feed"),
+    ("Import AI",           "https://jack-clark.net/feed/"),
+    ("One Useful Thing",    "https://www.oneusefulthing.org/feed"),
+    ("Simon Willison",      "https://simonwillison.net/atom/everything/"),
+    # ── UK & Europe ──────────────────────────────────────────
     (
         "Google News UK AI",
         "https://news.google.com/rss/search?q=UK+artificial+intelligence+news&hl=en-GB&gl=GB&ceid=GB:en",
@@ -183,7 +209,20 @@ RSS_FEEDS = [
         "Google News UK AI Safety",
         "https://news.google.com/rss/search?q=UK+AI+safety+institute&hl=en-GB&gl=GB&ceid=GB:en",
     ),
-    # ── Industry verticals ───────────────────────────────────
+    (
+        "Google News Europe AI",
+        "https://news.google.com/rss/search?q=artificial+intelligence+Europe+regulation&hl=en-GB&gl=GB&ceid=GB:en",
+    ),
+    # ── Asia & Global ─────────────────────────────────────────
+    (
+        "Google News China AI",
+        "https://news.google.com/rss/search?q=China+AI+artificial+intelligence&hl=en-US&gl=US&ceid=US:en",
+    ),
+    (
+        "Google News Global AI",
+        "https://news.google.com/rss/search?q=artificial+intelligence+world+news&hl=en-US&gl=US&ceid=US:en",
+    ),
+    # ── Industry verticals ────────────────────────────────────
     (
         "Google News AI Healthcare",
         "https://news.google.com/rss/search?q=AI+healthcare+medical&hl=en-US&gl=US&ceid=US:en",
@@ -200,7 +239,19 @@ RSS_FEEDS = [
         "Google News AI Finance",
         "https://news.google.com/rss/search?q=AI+fintech+trading+banking&hl=en-US&gl=US&ceid=US:en",
     ),
-    # ── General AI catch-all ─────────────────────────────────
+    (
+        "Google News AI Jobs",
+        "https://news.google.com/rss/search?q=AI+jobs+employment+automation+workforce&hl=en-US&gl=US&ceid=US:en",
+    ),
+    (
+        "Google News AI Climate",
+        "https://news.google.com/rss/search?q=AI+climate+energy+sustainability&hl=en-US&gl=US&ceid=US:en",
+    ),
+    (
+        "Google News AI Education",
+        "https://news.google.com/rss/search?q=AI+education+learning+schools&hl=en-US&gl=US&ceid=US:en",
+    ),
+    # ── General AI catch-all ──────────────────────────────────
     (
         "Google News AI Policy",
         "https://news.google.com/rss/search?q=AI+regulation+policy&hl=en-US&gl=US&ceid=US:en",
@@ -216,6 +267,18 @@ RSS_FEEDS = [
     (
         "Google News Open Source AI",
         "https://news.google.com/rss/search?q=open+source+AI+model+release&hl=en-US&gl=US&ceid=US:en",
+    ),
+    (
+        "Google News AI Startup",
+        "https://news.google.com/rss/search?q=AI+startup+funding+investment+series&hl=en-US&gl=US&ceid=US:en",
+    ),
+    (
+        "Google News AI Safety",
+        "https://news.google.com/rss/search?q=AI+safety+alignment+existential+risk&hl=en-US&gl=US&ceid=US:en",
+    ),
+    (
+        "Google News AI Business",
+        "https://news.google.com/rss/search?q=AI+enterprise+business+productivity+adoption&hl=en-US&gl=US&ceid=US:en",
     ),
 ]
 
