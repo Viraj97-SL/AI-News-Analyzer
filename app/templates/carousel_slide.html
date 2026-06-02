@@ -161,7 +161,7 @@
                 var(--bg);
             align-items: center;
             text-align: center;
-            justify-content: flex-start;
+            justify-content: space-evenly;
         }
 
         /* Centered logo block at the top */
@@ -170,7 +170,7 @@
             flex-direction: column;
             align-items: center;
             gap: 14px;
-            margin-bottom: 52px;
+            margin-bottom: 80px;
         }
         .cover-logo-mark {
             width: 72px;
@@ -225,7 +225,7 @@
             line-height: 1.12;
             color: #fff;
             text-shadow: 0 2px 20px rgba(0,0,0,0.5);
-            margin-bottom: 36px;
+            margin-bottom: 60px;
         }
 
         /* Topic tags row */
@@ -253,7 +253,7 @@
             align-items: center;
             gap: 16px;
             justify-content: center;
-            margin-bottom: 24px;
+            margin-bottom: 60px;
         }
         .cover-date-pill {
             display: inline-flex;
@@ -476,25 +476,27 @@
 
 
         /* ═══════════════════════════════════════════════════
-           CREDIBILITY BAR (fills space above footer)
+           CREDIBILITY BAR (inside left column, stacked vertically)
         ═══════════════════════════════════════════════════ */
+
+        /* Left column wrapper — stacks bullets then credibility bar */
+        .story-left {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 0;
+        }
+
         .credibility-bar {
-            display: grid;
-            grid-template-columns: 1fr 1px 1fr;
-            gap: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 14px;
-            padding: 16px 22px;
-            margin-top: 16px;
+            padding: 24px;
+            margin-top: auto;
             flex-shrink: 0;
-        }
-
-        .cred-divider-v {
-            background: var(--border);
-            width: 1px;
-            margin: 0 18px;
-            align-self: stretch;
         }
 
         .cred-section { display: flex; flex-direction: column; gap: 8px; }
@@ -699,17 +701,78 @@
 
     <div class="story-content">
 
-        {# LEFT: bullet points #}
-        <div class="key-points">
-            {% for point in key_points %}
-            <div class="key-point">
-                <div class="point-icon">
-                    {% if loop.index == 1 %}▸{% elif loop.index == 2 %}◆{% else %}◉{% endif %}
+        {# LEFT column: bullets + credibility bar stacked vertically #}
+        <div class="story-left">
+
+            <div class="key-points">
+                {% for point in key_points %}
+                <div class="key-point">
+                    <div class="point-icon">
+                        {% if loop.index == 1 %}▸{% elif loop.index == 2 %}◆{% else %}◉{% endif %}
+                    </div>
+                    <div class="point-text">{{ point }}</div>
                 </div>
-                <div class="point-text">{{ point }}</div>
+                {% endfor %}
             </div>
-            {% endfor %}
-        </div>
+
+            {# Credibility bar — sits under bullets, anchored to the bottom of the left column #}
+            <div class="credibility-bar">
+
+                {# Media lean section #}
+                <div class="cred-section">
+                    <div class="cred-section-label">Media Lean</div>
+
+                    <div class="lean-bar">
+                        {% if bias_dist.left_pct %}
+                        <div class="lean-seg left"   style="flex: {{ bias_dist.left_pct }};"></div>
+                        {% endif %}
+                        {% if bias_dist.center_pct %}
+                        <div class="lean-seg center" style="flex: {{ bias_dist.center_pct }};"></div>
+                        {% endif %}
+                        {% if bias_dist.right_pct %}
+                        <div class="lean-seg right"  style="flex: {{ bias_dist.right_pct }};"></div>
+                        {% endif %}
+                        {% if not bias_dist.left_pct and not bias_dist.center_pct and not bias_dist.right_pct %}
+                        <div class="lean-seg center" style="flex: 1;"></div>
+                        {% endif %}
+                    </div>
+
+                    <div class="lean-legend">
+                        {% if bias_dist.left %}
+                        <div class="lean-item"><div class="lean-dot" style="background: var(--lean-left);"></div>L:{{ bias_dist.left }}</div>
+                        {% endif %}
+                        {% if bias_dist.center %}
+                        <div class="lean-item"><div class="lean-dot" style="background: var(--lean-center);"></div>C:{{ bias_dist.center }}</div>
+                        {% endif %}
+                        {% if bias_dist.right %}
+                        <div class="lean-item"><div class="lean-dot" style="background: var(--lean-right);"></div>R:{{ bias_dist.right }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="lean-summary">{{ bias_dist.summary }}</div>
+                </div>
+
+                {# Reliability section #}
+                <div class="cred-section">
+                    <div class="cred-section-label">Reliability</div>
+
+                    <div class="rel-meta">
+                        <div class="rel-label">{{ reliability_label }}</div>
+                        <div class="rel-pct">{{ reliability_pct }}%</div>
+                    </div>
+
+                    <div class="rel-bar-track">
+                        <div class="rel-bar-fill" style="width: {{ reliability_pct }}%;"></div>
+                    </div>
+
+                    <div class="rel-sub">
+                        {{ source_count }} source{{ 's' if source_count != 1 else '' }} verified
+                        · Based on NewsGuard ratings
+                    </div>
+                </div>
+
+            </div>
+        </div>{# end .story-left #}
 
         {# RIGHT: image + stat + source badge #}
         <div class="story-right">
@@ -751,66 +814,6 @@
             </div>
 
         </div>
-    </div>
-
-    {# ── Credibility bar — fills the blank space above the footer ── #}
-    <div class="credibility-bar">
-
-        {# Left panel: media lean #}
-        <div class="cred-section">
-            <div class="cred-section-label">Media Lean</div>
-
-            <div class="lean-bar">
-                {% if bias_dist.left_pct %}
-                <div class="lean-seg left"   style="flex: {{ bias_dist.left_pct }};"></div>
-                {% endif %}
-                {% if bias_dist.center_pct %}
-                <div class="lean-seg center" style="flex: {{ bias_dist.center_pct }};"></div>
-                {% endif %}
-                {% if bias_dist.right_pct %}
-                <div class="lean-seg right"  style="flex: {{ bias_dist.right_pct }};"></div>
-                {% endif %}
-                {% if not bias_dist.left_pct and not bias_dist.center_pct and not bias_dist.right_pct %}
-                <div class="lean-seg center" style="flex: 1;"></div>
-                {% endif %}
-            </div>
-
-            <div class="lean-legend">
-                {% if bias_dist.left %}
-                <div class="lean-item"><div class="lean-dot" style="background: var(--lean-left);"></div>L:{{ bias_dist.left }}</div>
-                {% endif %}
-                {% if bias_dist.center %}
-                <div class="lean-item"><div class="lean-dot" style="background: var(--lean-center);"></div>C:{{ bias_dist.center }}</div>
-                {% endif %}
-                {% if bias_dist.right %}
-                <div class="lean-item"><div class="lean-dot" style="background: var(--lean-right);"></div>R:{{ bias_dist.right }}</div>
-                {% endif %}
-            </div>
-
-            <div class="lean-summary">{{ bias_dist.summary }}</div>
-        </div>
-
-        <div class="cred-divider-v"></div>
-
-        {# Right panel: reliability #}
-        <div class="cred-section">
-            <div class="cred-section-label">Reliability</div>
-
-            <div class="rel-meta">
-                <div class="rel-label">{{ reliability_label }}</div>
-                <div class="rel-pct">{{ reliability_pct }}%</div>
-            </div>
-
-            <div class="rel-bar-track">
-                <div class="rel-bar-fill" style="width: {{ reliability_pct }}%;"></div>
-            </div>
-
-            <div class="rel-sub">
-                {{ source_count }} source{{ 's' if source_count != 1 else '' }} verified
-                · Based on NewsGuard ratings
-            </div>
-        </div>
-
     </div>
 
     <div class="slide-footer">
