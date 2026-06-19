@@ -69,6 +69,7 @@ class PipelineState(TypedDict):
 
     # ── Manual paper override ────────────────────────────────
     manual_paper_url: NotRequired[str]       # ArXiv URL/ID passed at trigger time (API or cron)
+    is_classic_paper: NotRequired[bool]      # True when auto-rotated from famous-papers archive
     paper_rankings: NotRequired[list[dict]]  # scored+sorted list from rank_papers_node
     paper_figures: NotRequired[list[dict]]   # [{b64: str, caption: str}] from architecture_diagram_node
 

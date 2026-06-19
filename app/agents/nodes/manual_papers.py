@@ -1,10 +1,11 @@
 """
 Manual papers node — loads user-curated papers into the research pipeline.
 
-Two sources are checked:
+Three sources are checked (in priority order):
   1. state['manual_paper_url']  — single URL passed when triggering the API.
-  2. data/manual_papers.json    — persistent reading list; queue entries are
-                                   processed and moved to archive after each run.
+  2. data/manual_papers.json queue — persistent reading list.
+  3. Auto-rotation from archive — randomly injects a landmark paper (~33% of runs)
+     when queue is empty and no API override is present.
 
 All loaded papers are returned as raw_articles with source='manual' so the
 rank_papers_node gives them a strong priority boost over scraped ArXiv papers.
@@ -13,6 +14,7 @@ rank_papers_node gives them a strong priority boost over scraped ArXiv papers.
 from __future__ import annotations
 
 import json
+import random
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -67,7 +69,37 @@ def _fetch_arxiv_paper(url_or_id: str) -> dict | None:
         return None
 
 
-_MAX_QUEUE_PER_RUN = 1  # Process at most 1 queued paper per run to avoid overloading the pipeline
+_MAX_QUEUE_PER_RUN = 1  # Process at most 1 queued paper per run
+_CLASSIC_INJECTION_PROBABILITY = 0.33  # ~1 in 3 runs when queue is empty
+_RECENTLY_FEATURED_MAX = 12  # avoid re-featuring the same paper too soon
+
+
+def _pick_classic_paper(data: dict) -> dict | None:
+    """
+    Randomly pick one landmark paper from the archive that hasn't been
+    featured recently, then record it in recently_featured.
+    Returns a queue-style entry dict, or None if archive is empty.
+    """
+    archive: list[dict] = data.get("archive", [])
+    if not archive:
+        return None
+
+    recently_featured: list[str] = data.get("recently_featured", [])
+    recent_urls = set(recently_featured[-_RECENTLY_FEATURED_MAX:])
+
+    # Build candidate pool excluding recently featured entries
+    candidates = [e for e in archive if e.get("url", "") not in recent_urls]
+    if not candidates:
+        # All have been featured recently — reset and pick from full archive
+        candidates = archive
+
+    chosen = random.choice(candidates)
+
+    # Track this pick so we don't repeat it soon
+    recently_featured.append(chosen.get("url", ""))
+    data["recently_featured"] = recently_featured[-_RECENTLY_FEATURED_MAX:]
+
+    return chosen
 
 
 def load_manual_papers_node(state: "PipelineState") -> dict:
@@ -76,15 +108,18 @@ def load_manual_papers_node(state: "PipelineState") -> dict:
 
     Priority order:
       1. manual_paper_url from state (API-triggered, one-shot override).
-      2. Queue in data/manual_papers.json (reading list) — capped at _MAX_QUEUE_PER_RUN.
+      2. Queue in data/manual_papers.json (reading list).
+      3. Auto-rotation: if queue is empty and no override, randomly (~33%)
+         inject a landmark paper from the archive as a Classic Paper Series run.
 
     Processed queue entries are moved to 'archive' so they are not re-run.
+    is_classic_paper=True is set in state when source 3 triggers.
 
-    Note: On Railway (ephemeral containers) the file write does not persist between
-    deployments. Keep the queue short (0-1 entries) and prefer the API trigger for
-    one-off overrides.
+    Note: On Railway (ephemeral containers) file writes don't persist between
+    deployments. Keep the queue short (0-1 entries) and prefer the API trigger.
     """
     articles: list[dict] = []
+    is_classic_paper = False
 
     # ── 1. State-level override (API trigger) ────────────────────────────
     manual_url = state.get("manual_paper_url", "")
@@ -95,14 +130,12 @@ def load_manual_papers_node(state: "PipelineState") -> dict:
             articles.append(paper)
             logger.info("manual_state_paper_loaded", title=paper["title"])
 
-    # ── 2. Reading list file ─────────────────────────────────────────────
+    # ── 2. Reading list file + 3. Classic paper auto-rotation ────────────
     if _MANUAL_PAPERS_PATH.exists():
         try:
             data = json.loads(_MANUAL_PAPERS_PATH.read_text(encoding="utf-8"))
             queue: list[dict] = data.get("queue", [])
 
-            # Only process the first _MAX_QUEUE_PER_RUN entries to keep the
-            # pipeline fast and within memory limits.
             batch = queue[:_MAX_QUEUE_PER_RUN]
 
             if batch:
@@ -115,7 +148,6 @@ def load_manual_papers_node(state: "PipelineState") -> dict:
                         continue
                     paper = _fetch_arxiv_paper(url)
                     if paper:
-                        # Prepend user note to abstract for context during analysis
                         if entry.get("note"):
                             paper["content"] = (
                                 f"[Curator note: {entry['note']}]\n\n{paper['content']}"
@@ -124,16 +156,43 @@ def load_manual_papers_node(state: "PipelineState") -> dict:
                         logger.info("queued_paper_loaded", title=paper["title"])
                     processed.append({**entry, "processed_at": datetime.now(UTC).isoformat()})
 
-                # Archive processed entries so they are not re-processed
-                data["queue"] = queue[_MAX_QUEUE_PER_RUN:]  # leave remaining entries for future runs
+                data["queue"] = queue[_MAX_QUEUE_PER_RUN:]
                 data.setdefault("archive", []).extend(processed)
                 _MANUAL_PAPERS_PATH.write_text(
                     json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
                 )
                 logger.info("manual_queue_partially_archived", archived=len(processed), remaining=len(data["queue"]))
 
+            elif not manual_url and random.random() < _CLASSIC_INJECTION_PROBABILITY:
+                # Queue is empty and no API override — randomly inject a landmark paper
+                classic_entry = _pick_classic_paper(data)
+                if classic_entry:
+                    url = classic_entry.get("url", "").strip()
+                    paper = _fetch_arxiv_paper(url) if url else None
+                    if paper:
+                        note = classic_entry.get("note", "")
+                        if note:
+                            paper["content"] = (
+                                f"[Classic Paper — {note}]\n\n{paper['content']}"
+                            )
+                        articles.append(paper)
+                        is_classic_paper = True
+                        logger.info(
+                            "classic_paper_auto_injected",
+                            title=paper["title"],
+                            url=url,
+                        )
+                        # Persist the updated recently_featured list
+                        _MANUAL_PAPERS_PATH.write_text(
+                            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+                        )
+
         except Exception as e:
             logger.warning("manual_papers_file_error", error=str(e))
 
-    logger.info("manual_papers_total_loaded", count=len(articles))
-    return {"raw_articles": articles, "current_step": "manual_papers_loaded"}
+    logger.info("manual_papers_total_loaded", count=len(articles), is_classic=is_classic_paper)
+    return {
+        "raw_articles": articles,
+        "is_classic_paper": is_classic_paper,
+        "current_step": "manual_papers_loaded",
+    }

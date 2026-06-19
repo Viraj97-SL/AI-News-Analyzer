@@ -63,9 +63,10 @@ def prior_art_node(state: "PipelineState") -> dict:
 
         prompt = ChatPromptTemplate.from_messages([
             ("system",
-             "You are an AI research expert. Compare this paper against the most relevant prior SOTA method. "
+             "You are an AI research analyst comparing a paper against prior SOTA. "
+             "You are NOT the author — refer to the paper's contributions as 'the authors', 'this paper', or 'the proposed method'. "
              "Identify 3–5 concrete dimensions where they differ (e.g. accuracy, efficiency, novelty, scalability). "
-             "Be specific and quantitative where possible — only use values actually mentioned in the text."),
+             "Be specific and quantitative — only use values actually mentioned in the text."),
             ("user",
              "Title: {title}\n\n"
              "Core Problem: {core_problem}\n\n"

@@ -91,8 +91,8 @@ def benchmark_chart_node(state: "PipelineState") -> dict:
         fig_height = max(2.8, n * 0.95 + (0.7 if has_sota else 0))
         fig, ax = plt.subplots(figsize=(9, fig_height))
 
-        fig.patch.set_facecolor("#030305")
-        ax.set_facecolor("#0a0a14")
+        fig.patch.set_facecolor("#F8FAFC")
+        ax.set_facecolor("#FFFFFF")
 
         bar_h = 0.35
         y_pos = list(range(n))
@@ -100,17 +100,17 @@ def benchmark_chart_node(state: "PipelineState") -> dict:
         if has_sota:
             ax.barh(
                 [y + bar_h / 2 for y in y_pos], new_vals, bar_h,
-                color="#00f3ff", label="This Paper", zorder=3,
+                color="#0EA5E9", label="This Paper", zorder=3,
             )
             for i, (y, v) in enumerate(zip(y_pos, sota_vals)):
                 if v is not None:
                     ax.barh(
                         y - bar_h / 2, v, bar_h,
-                        color="#445566", label="Prior SOTA" if i == 0 else "",
+                        color="#CBD5E1", label="Prior SOTA" if i == 0 else "",
                         zorder=3,
                     )
         else:
-            ax.barh(y_pos, new_vals, 0.55, color="#00f3ff", zorder=3)
+            ax.barh(y_pos, new_vals, 0.55, color="#0EA5E9", zorder=3)
 
         # Value annotations
         max_val = max(new_vals) if new_vals else 1
@@ -118,38 +118,38 @@ def benchmark_chart_node(state: "PipelineState") -> dict:
             offset = bar_h / 2 if has_sota else 0
             ax.text(
                 v + max_val * 0.01, y + offset, f"{v}",
-                va="center", color="white", fontsize=9,
+                va="center", color="#0F172A", fontsize=9,
                 fontfamily="monospace", fontweight="bold",
             )
 
         # Styling — matplotlib uses (R,G,B,A) tuples, not CSS rgba()
         ax.set_yticks(y_pos)
-        ax.set_yticklabels(labels, fontsize=9, color="#ccccdd", fontfamily="monospace")
-        ax.tick_params(colors="white", length=0)
+        ax.set_yticklabels(labels, fontsize=9, color="#334155", fontfamily="monospace")
+        ax.tick_params(colors="#475569", length=0)
         for spine in ax.spines.values():
-            spine.set_edgecolor((0.0, 0.95, 1.0, 0.2))
-        ax.tick_params(axis="x", colors=(1.0, 1.0, 1.0, 0.4), labelsize=8)
-        ax.set_xlabel("Score", color=(1.0, 1.0, 1.0, 0.4), fontfamily="monospace", fontsize=9)
+            spine.set_edgecolor((0.88, 0.91, 0.94, 1.0))  # Slate-200
+        ax.tick_params(axis="x", colors=(0.45, 0.51, 0.59, 1.0), labelsize=8)  # Slate-500
+        ax.set_xlabel("Score", color=(0.45, 0.51, 0.59, 1.0), fontfamily="monospace", fontsize=9)
         ax.set_title(
             "Benchmark Comparison",
-            color="#00f3ff", fontfamily="monospace", fontsize=11, pad=10, fontweight="bold",
+            color="#0EA5E9", fontfamily="monospace", fontsize=11, pad=10, fontweight="bold",
         )
-        ax.grid(axis="x", color=(0.0, 0.95, 1.0, 0.1), linewidth=0.5, zorder=0)
+        ax.grid(axis="x", color=(0.88, 0.91, 0.94, 1.0), linewidth=0.8, zorder=0)
 
         if has_sota:
-            cyan_p = mpatches.Patch(color="#00f3ff", label="This Paper")
-            gray_p = mpatches.Patch(color="#445566", label="Prior SOTA")
+            blue_p = mpatches.Patch(color="#0EA5E9", label="This Paper")
+            gray_p = mpatches.Patch(color="#CBD5E1", label="Prior SOTA")
             ax.legend(
-                handles=[cyan_p, gray_p],
-                facecolor="#0a0a14", edgecolor=(0.0, 0.95, 1.0, 0.3),
-                labelcolor="white", fontsize=8, prop={"family": "monospace"},
+                handles=[blue_p, gray_p],
+                facecolor="#F8FAFC", edgecolor=(0.88, 0.91, 0.94, 1.0),
+                labelcolor="#334155", fontsize=8, prop={"family": "monospace"},
             )
 
         plt.tight_layout(pad=0.5)
 
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         chart_path = str(OUTPUT_DIR / f"benchmark_chart_{run_id}.png")
-        plt.savefig(chart_path, dpi=150, bbox_inches="tight", facecolor="#030305")
+        plt.savefig(chart_path, dpi=150, bbox_inches="tight", facecolor="#F8FAFC")
         plt.close(fig)
 
         logger.info("benchmark_chart_generated", path=chart_path, metric_count=n)

@@ -150,7 +150,7 @@ class HookScore(BaseModel):
 # ── SVG Gauge Helper (Feature 8) ─────────────────────────────────────────────
 
 def _render_gauge_svg(label: str, value: int, color: str) -> str:
-    """Return an inline SVG radial gauge with neon glow for a 1-10 score."""
+    """Return an inline SVG radial gauge for a 1-10 score (light theme)."""
     r = 40.0
     circumference = 2 * math.pi * r   # 251.33
     arc_span = circumference * 0.75    # 188.50 (270°)
@@ -165,19 +165,18 @@ def _render_gauge_svg(label: str, value: int, color: str) -> str:
         f'<div style="display:flex;flex-direction:column;align-items:center;gap:2px">'
         f'<svg width="100" height="100" viewBox="0 0 120 120">'
         f'<circle cx="60" cy="60" r="{r:.0f}" fill="none"'
-        f' stroke="rgba(255,255,255,0.08)" stroke-width="9" stroke-linecap="round"'
+        f' stroke="#E2E8F0" stroke-width="9" stroke-linecap="round"'
         f' stroke-dasharray="{bg_dash}" transform="{transform}"/>'
         f'<circle cx="60" cy="60" r="{r:.0f}" fill="none"'
         f' stroke="{color}" stroke-width="9" stroke-linecap="round"'
-        f' stroke-dasharray="{fg_dash}" transform="{transform}"'
-        f' style="filter:drop-shadow(0 0 5px {color})"/>'
-        f'<text x="60" y="55" text-anchor="middle" fill="white"'
+        f' stroke-dasharray="{fg_dash}" transform="{transform}"/>'
+        f'<text x="60" y="55" text-anchor="middle" fill="#0F172A"'
         f' font-size="24" font-weight="700" font-family="JetBrains Mono,monospace">{value}</text>'
-        f'<text x="60" y="72" text-anchor="middle" fill="rgba(255,255,255,0.35)"'
+        f'<text x="60" y="72" text-anchor="middle" fill="#94A3B8"'
         f' font-size="11" font-family="JetBrains Mono,monospace">/10</text>'
         f'</svg>'
         f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:9px;'
-        f'color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:1.5px;'
+        f'color:#64748B;text-transform:uppercase;letter-spacing:1.5px;'
         f'text-align:center;margin-top:-4px">{label}</div>'
         f'</div>'
     )
@@ -246,7 +245,9 @@ def select_paper_node(state: PipelineState) -> dict:
 
 
 _LINKEDIN_RESEARCH_SYSTEM = """\
-You are a LinkedIn content strategist for an elite AI research lab with 150k+ followers.
+You are an independent AI research analyst and science communicator covering groundbreaking papers \
+for an audience of 150k+ engineers and researchers. You DESCRIBE other people's work — you are NOT \
+the author of this paper.
 
 Write a LinkedIn post about this research paper. Use this EXACT 8-section structure:
 
@@ -301,7 +302,20 @@ HARD RULES:
 - NO URLs in body
 - NO filler: "game-changer", "revolutionary", "groundbreaking", "fascinating"
 - Every claim must come from the actual paper results
-- Tone: senior researcher explaining to senior engineer — authoritative, not hype\
+- Tone: senior analyst explaining to senior engineer — authoritative, not hype
+- ATTRIBUTION (CRITICAL): You are describing OTHERS' research. NEVER use "we", "our", or "I" \
+  when referring to the paper's findings. Always use third person: "the authors", "the team", \
+  "the researchers", "[Institution] researchers", "the paper", "they show", "the study finds".\
+"""
+
+
+_LINKEDIN_CLASSIC_ADDENDUM = """\
+
+ADDITIONAL RULES FOR CLASSIC/LANDMARK PAPERS:
+- Open with historical context: when it was published, what state the field was in before it
+- Explain what specifically changed after this paper — "before X, the field did Y; after X, it did Z"
+- Highlight why it still matters or what it enabled downstream
+- Frame it as "revisiting a landmark": "5 years later, here's what [Paper] actually got right"\
 """
 
 
@@ -466,10 +480,13 @@ def deep_analysis_node(state: PipelineState) -> dict:
 
     analysis_prompt = ChatPromptTemplate.from_messages([
         ("system",
-         "You are a Senior AI Research Scientist and Principal Investigator. "
-         "Analyse this research paper deeply. Extract technical concepts with precision, "
-         "explaining them for a highly technical audience (PhDs, ML Engineers, Staff Engineers). "
-         "Do NOT use marketing speak or generic praise. Be specific, calibrated, and honest. "
+         "You are a senior AI research analyst reviewing and explaining a paper written by others. "
+         "You are NOT the author — you are breaking down their work for a technical audience "
+         "(PhDs, ML Engineers, Staff Engineers). "
+         "ALWAYS describe findings in third person: 'the authors propose', 'the researchers show', "
+         "'the paper demonstrates', 'the team finds', 'the study reports'. "
+         "NEVER use 'we', 'our', or 'I' to refer to the paper's contributions or methods. "
+         "Be specific, calibrated, and honest. Avoid marketing speak or generic praise. "
          "If the content is only an abstract, extract what you can and clearly note where "
          "full-paper details are needed."),
         ("user", "Title: {title}\n\nPaper Content:\n{content}"),
@@ -491,8 +508,10 @@ def deep_analysis_node(state: PipelineState) -> dict:
         api_key=settings.google_api_key,
     )
 
+    is_classic = state.get("is_classic_paper", False)
+    linkedin_system = _LINKEDIN_RESEARCH_SYSTEM + (_LINKEDIN_CLASSIC_ADDENDUM if is_classic else "")
     linkedin_prompt = ChatPromptTemplate.from_messages([
-        ("system", _LINKEDIN_RESEARCH_SYSTEM),
+        ("system", linkedin_system),
         ("user",
          "Paper title: {title}\n\n"
          "Core problem: {core_problem}\n\n"
@@ -738,10 +757,10 @@ def paperbanana_visual_node(state: PipelineState) -> dict:
             gauges_html = ""
             if research_scores:
                 gauge_defs = [
-                    ("Novelty",       research_scores.get("novelty", 0),              "#00f3ff"),
-                    ("Clarity",       research_scores.get("methodology_clarity", 0),  "#9d00ff"),
-                    ("Benchmarks",    research_scores.get("benchmark_improvement", 0),"#00ff9d"),
-                    ("Repro",         research_scores.get("reproducibility", 0),       "#ff2d78"),
+                    ("Novelty",       research_scores.get("novelty", 0),              "#0EA5E9"),
+                    ("Clarity",       research_scores.get("methodology_clarity", 0),  "#7C3AED"),
+                    ("Benchmarks",    research_scores.get("benchmark_improvement", 0),"#059669"),
+                    ("Repro",         research_scores.get("reproducibility", 0),       "#E11D48"),
                 ]
                 gauge_svgs = [_render_gauge_svg(lbl, val, col) for lbl, val, col in gauge_defs]
                 gauges_html = "".join(gauge_svgs)

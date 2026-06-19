@@ -1,16 +1,22 @@
 """
-Research carousel node — renders a 5-slide 1080×1080 PDF carousel for LinkedIn.
+Research carousel node — renders a 10-slide 1080×1080 PDF carousel for LinkedIn.
 
 Slide order:
-  1. Title + Hook
-  2. Core Problem
-  3. Methodology
-  4. Benchmarks / Breakthroughs
-  5. Takeaways + CTA
+  1. Cover (title + hook)
+  2. The Problem
+  3. Prior Art vs This Paper
+  4. Methodology (+ architecture diagram if available)
+  5. Key Innovations
+  6. Experiment Setup
+  7. Results (+ benchmark chart if available)
+  8. Ablation Study
+  9. Real-World Impact
+  10. Takeaways + CTA
 """
 
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -35,6 +41,22 @@ def research_carousel_node(state: "PipelineState") -> dict:
     linkedin_draft = state.get("linkedin_draft", "")
     prior_art = state.get("prior_art_comparison", {})
     run_id = state.get("run_id", "dev")
+    is_classic = state.get("is_classic_paper", False)
+
+    # Base64-encode the architecture diagram (already stored as b64 in state)
+    arch_b64 = state.get("architecture_diagram_b64", "")
+
+    # Base64-encode the benchmark chart PNG if available
+    benchmark_chart_path = state.get("benchmark_chart_path", "")
+    benchmark_chart_b64 = ""
+    if benchmark_chart_path and Path(benchmark_chart_path).exists():
+        try:
+            benchmark_chart_b64 = base64.b64encode(
+                Path(benchmark_chart_path).read_bytes()
+            ).decode()
+
+        except Exception:
+            pass  # chart unavailable; slides render without it
 
     if not analysis or not paper:
         return {
@@ -78,6 +100,7 @@ def research_carousel_node(state: "PipelineState") -> dict:
                 "hook": hook,
                 "significance_verdict": analysis.get("significance_verdict", ""),
                 "paper_url": paper.get("url", ""),
+                "is_classic_paper": is_classic,
             },
             # 2 · The Problem
             {
@@ -95,13 +118,14 @@ def research_carousel_node(state: "PipelineState") -> dict:
                 "prior_art": prior_art,
                 "technical_innovation": analysis.get("technical_innovation", ""),
             },
-            # 4 · Methodology
+            # 4 · Methodology — injects architecture diagram when available
             {
                 "slide_type": "methodology",
                 "slide_num": 4,
                 "total_slides": _TOTAL_SLIDES,
                 "methodology": analysis.get("methodology", ""),
                 "technical_innovation": analysis.get("technical_innovation", ""),
+                "architecture_diagram_b64": arch_b64,
             },
             # 5 · Key Innovations (numbered contributions)
             {
@@ -119,13 +143,14 @@ def research_carousel_node(state: "PipelineState") -> dict:
                 "experiment_setup": analysis.get("experiment_setup", ""),
                 "methodology_fallback": analysis.get("methodology", "")[:300],
             },
-            # 7 · Results
+            # 7 · Results — injects benchmark chart when available
             {
                 "slide_type": "results",
                 "slide_num": 7,
                 "total_slides": _TOTAL_SLIDES,
                 "quantitative_results": analysis.get("quantitative_results", []),
                 "breakthroughs": analysis.get("breakthroughs", ""),
+                "benchmark_chart_b64": benchmark_chart_b64,
             },
             # 8 · Ablation Study
             {
