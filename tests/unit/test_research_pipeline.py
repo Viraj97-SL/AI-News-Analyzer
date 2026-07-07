@@ -453,6 +453,109 @@ class TestResearchCarouselNode:
         # All 10 slides should still render
         assert mock_h2i.return_value.screenshot.call_count == 10
 
+    def _capture_slide_htmls(self, state: dict, tmp_path) -> dict[str, str]:
+        """Render the carousel, capturing each slide's HTML keyed by slide type."""
+        mock_fitz = MagicMock()
+        mock_fitz.open.return_value.convert_to_pdf.return_value = b"PDF"
+
+        captured: dict[str, str] = {}
+        # filenames look like research_carousel_<run_id>_<slide_type>.png — strip the
+        # known prefix/suffix rather than splitting on "_" (slide types contain "_" too).
+        prefix = f"research_carousel_{state.get('run_id', 'dev')}_"
+
+        def fake_screenshot(**kwargs):
+            filename = kwargs.get("save_as", "")
+            html_str = kwargs.get("html_str", "")
+            slide_type = filename[len(prefix):] if filename.startswith(prefix) else filename
+            slide_type = slide_type.removesuffix(".png")
+            captured[slide_type] = html_str
+            (tmp_path / filename).write_bytes(b"PNG")
+
+        mock_h2i = MagicMock()
+        mock_h2i.return_value.screenshot.side_effect = fake_screenshot
+
+        with patch.dict(sys.modules, {"fitz": mock_fitz}), \
+             patch("html2image.Html2Image", mock_h2i), \
+             patch("app.agents.nodes.research_carousel.OUTPUT_DIR", tmp_path):
+            research_carousel_node(state)
+
+        return captured
+
+    def test_architecture_fallback_rendered_when_no_diagram(self, tmp_path):
+        """Slide 4 must render the ASCII fallback, not a blank panel, when there's
+        no extracted figure but architecture_fallback_text is present."""
+        state = self._make_state(
+            architecture_diagram_b64="",
+            architecture_fallback_text='<pre style="color:#7C3AED">BOX -> BOX</pre>',
+        )
+        htmls = self._capture_slide_htmls(state, tmp_path)
+        assert "BOX -> BOX" in htmls["methodology"]  # |safe must not double-escape it
+        assert "<img" not in htmls["methodology"]
+
+    def test_whitespace_only_b64_treated_as_absent(self, tmp_path):
+        """A blank/whitespace architecture_diagram_b64 must not render an empty <img> panel."""
+        state = self._make_state(
+            architecture_diagram_b64="   ",
+            architecture_fallback_text='<pre>fallback</pre>',
+        )
+        htmls = self._capture_slide_htmls(state, tmp_path)
+        assert "<img" not in htmls["methodology"]
+        assert "fallback" in htmls["methodology"]
+
+    def test_methodology_full_width_when_no_diagram_or_fallback(self, tmp_path):
+        """With neither a diagram nor fallback text, slide 4 must not show an
+        (empty) architecture panel at all."""
+        state = self._make_state(architecture_diagram_b64="", architecture_fallback_text="")
+        htmls = self._capture_slide_htmls(state, tmp_path)
+        assert "ARCHITECTURE DIAGRAM" not in htmls["methodology"]
+
+    def test_figures_slide_added_when_two_or_more_figures(self, tmp_path):
+        state = self._make_state(paper_figures=[
+            {"b64": "aaa", "caption": "Figure 1"},
+            {"b64": "bbb", "caption": "Figure 2"},
+        ])
+        htmls = self._capture_slide_htmls(state, tmp_path)
+        assert "figures" in htmls
+        assert "Figure 1" in htmls["figures"]
+        assert "Figure 2" in htmls["figures"]
+        # Base deck (10) + 1 figures slide = 11
+        assert len(htmls) == 11
+
+    def test_no_figures_slide_with_fewer_than_two_figures(self, tmp_path):
+        state = self._make_state(paper_figures=[{"b64": "aaa", "caption": "Figure 1"}])
+        htmls = self._capture_slide_htmls(state, tmp_path)
+        assert "figures" not in htmls
+        assert len(htmls) == 10
+
+    def test_no_figures_slide_when_absent(self, tmp_path):
+        state = self._make_state()
+        htmls = self._capture_slide_htmls(state, tmp_path)
+        assert "figures" not in htmls
+        assert len(htmls) == 10
+
+    def test_slide_numbering_reflects_dynamic_total(self, tmp_path):
+        """The footer 'N / total' must reflect 11 slides once a figures slide is added."""
+        state = self._make_state(paper_figures=[
+            {"b64": "aaa", "caption": ""},
+            {"b64": "bbb", "caption": ""},
+        ])
+        htmls = self._capture_slide_htmls(state, tmp_path)
+        assert "1 / 11" in htmls["cover"]
+        assert "11 / 11" in htmls["takeaways"]
+
+    def test_score_gauges_rendered_on_cover_when_scores_present(self, tmp_path):
+        state = self._make_state(research_scores={
+            "novelty": 8, "methodology_clarity": 7,
+            "benchmark_improvement": 9, "reproducibility": 5,
+        })
+        htmls = self._capture_slide_htmls(state, tmp_path)
+        assert "<svg" in htmls["cover"]
+
+    def test_no_gauges_on_cover_when_scores_absent(self, tmp_path):
+        state = self._make_state(research_scores={})
+        htmls = self._capture_slide_htmls(state, tmp_path)
+        assert "<svg" not in htmls["cover"]
+
     def test_graceful_fallback_with_sparse_analysis(self, tmp_path):
         """Carousel must render all 10 slides even when new fields are absent (old analysis)."""
         mock_fitz = MagicMock()

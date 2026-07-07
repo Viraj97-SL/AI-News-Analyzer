@@ -220,9 +220,9 @@ def _ascii_fallback(methodology: str) -> str:
         if isinstance(_resp, list) else _resp.strip()
     )
     return (
-        '<pre style="color:#00f3ff;font-family:\'JetBrains Mono\',monospace;'
-        "font-size:11px;background:rgba(0,243,255,0.04);padding:14px;"
-        "border-radius:6px;border:1px solid rgba(0,243,255,0.15);"
+        '<pre style="color:#7C3AED;font-family:\'JetBrains Mono\',monospace;'
+        "font-size:11px;background:#F8FAFC;padding:14px;"
+        "border-radius:6px;border:1px solid #E2E8F0;"
         f'overflow:hidden;line-height:1.6;margin:0;white-space:pre-wrap">{text}</pre>'
     )
 
