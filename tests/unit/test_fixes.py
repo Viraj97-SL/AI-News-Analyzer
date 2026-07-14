@@ -46,6 +46,32 @@ class TestParseJsonTolerant:
         result = _parse_json_tolerant(raw)
         assert result[0]["headline"] == "Test"
 
+    def test_recovers_mid_document_missing_comma(self):
+        # Reproduces the production failure: a missing comma between two
+        # complete objects deep in the array (not at the end, not "Extra
+        # data" trailing content) — neither of the two targeted recoveries
+        # above catches this; only the json_repair last resort does.
+        broken = (
+            '[{"headline": "A", "body": "First story"}'
+            '{"headline": "B", "body": "Second story"}]'
+        )
+        result = _parse_json_tolerant(broken)
+        assert len(result) == 2
+        assert result[0]["headline"] == "A"
+        assert result[1]["headline"] == "B"
+
+    def test_recovers_unescaped_quote_in_body(self):
+        # A raw double-quote inside a string value (e.g. a quoted remark in
+        # a news summary) breaks strict json.loads with "Expecting ','
+        # delimiter" mid-document, exactly like the production incident.
+        broken = (
+            '[{"headline": "CEO says "AI is the future" in interview",'
+            ' "body": "Details here."}]'
+        )
+        result = _parse_json_tolerant(broken)
+        assert len(result) == 1
+        assert "future" in result[0]["headline"]
+
 
 # ── response.content list handling ─────────────────────────────────────────
 

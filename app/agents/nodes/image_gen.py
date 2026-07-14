@@ -19,7 +19,7 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -27,6 +27,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 if TYPE_CHECKING:
     from app.agents.state import PipelineState
 
+from app.agents.nodes.screenshot_utils import capture_slide, make_hti
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
@@ -39,6 +40,11 @@ TEMPLATE_DIR = Path(__file__).parent.parent.parent / "templates"
 # Single source of truth for how many stories appear in the carousel AND the LinkedIn post.
 # Changing this one constant keeps both in sync.
 CAROUSEL_STORY_COUNT = 7
+
+# Browser-style UA required by some hosts (notably Wikimedia, which 403s
+# bare/generic UAs per its bot-etiquette policy) — reused for every outbound
+# image/page fetch so behavior is consistent and no host silently blocks us.
+_HTTP_USER_AGENT = "Mozilla/5.0 (compatible; ai-news-summarizer/1.0; +https://example.com)"
 
 # Color palette updated to match new editorial theme
 CATEGORY_COLORS: dict[str, str] = {
@@ -278,7 +284,7 @@ def _download_image_data_uri(image_url: str) -> str | None:
     """Download an image URL and return a data URI (mime + base64). Returns None on failure."""
     try:
         with httpx.Client(timeout=8, follow_redirects=True) as client:
-            resp = client.get(image_url, headers={"User-Agent": "Mozilla/5.0"})
+            resp = client.get(image_url, headers={"User-Agent": _HTTP_USER_AGENT})
             resp.raise_for_status()
             mime = resp.headers.get("content-type", "").split(";")[0].strip()
             if not mime.startswith("image/"):
@@ -290,42 +296,119 @@ def _download_image_data_uri(image_url: str) -> str | None:
         return None
 
 
-def _fetch_og_image(url: str) -> str | None:
+# Filename fragments that signal a non-editorial image (site chrome, not a
+# photo worth showing) — checked case-insensitively against candidate URLs.
+_IMG_SKIP_PATTERN = re.compile(
+    r"(logo|icon|favicon|avatar|sprite|pixel|spacer|placeholder|badge|1x1|blank\.gif)",
+    re.IGNORECASE,
+)
+
+# Meta/link tags that carry a representative article image, in priority order.
+# Each entry is (attribute-match regex, attribute-then-content regex) so we
+# catch both `<meta property=X content=Y>` and `<meta content=Y property=X>`
+# tag orderings, which vary across CMSs.
+_META_IMAGE_PATTERNS: list[tuple[str, str]] = [
+    (
+        r'<meta[^>]+property=["\']og:image(?::secure_url)?["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image(?::secure_url)?["\']',
+    ),
+    (
+        r'<meta[^>]+name=["\']twitter:image(?::src)?["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image(?::src)?["\']',
+    ),
+    (
+        r'<link[^>]+rel=["\']image_src["\'][^>]+href=["\']([^"\']+)["\']',
+        r'<link[^>]+href=["\']([^"\']+)["\'][^>]+rel=["\']image_src["\']',
+    ),
+]
+
+
+def _fetch_page_html(url: str) -> str | None:
+    """Fetch a page's raw HTML. Returns None on any network failure."""
+    try:
+        with httpx.Client(timeout=6, follow_redirects=True) as client:
+            resp = client.get(url, headers={"User-Agent": _HTTP_USER_AGENT})
+            resp.raise_for_status()
+            return resp.text
+    except Exception as e:
+        logger.debug("page_fetch_failed", url=url, error=str(e))
+        return None
+
+
+def _extract_meta_image_url(html: str) -> str | None:
+    """Scan og:image / twitter:image / link[rel=image_src] tags, first match wins."""
+    for attr_first, content_first in _META_IMAGE_PATTERNS:
+        m = re.search(attr_first, html, re.IGNORECASE) or re.search(content_first, html, re.IGNORECASE)
+        if m:
+            candidate = m.group(1).strip()
+            if candidate and not _IMG_SKIP_PATTERN.search(candidate):
+                return candidate
+    return None
+
+
+def _extract_body_image_url(html: str) -> str | None:
     """
-    Fetch the og:image from an article page and return a data URI.
-    Returns None on any failure.
+    Fallback: scan article-body <img> tags for the first substantial, real
+    photo, skipping obvious site chrome (logos, icons, tracking pixels).
+    Used when a page exposes no usable og:image/twitter:image meta tags.
     """
     try:
-        with httpx.Client(timeout=5, follow_redirects=True) as client:
-            resp = client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-            resp.raise_for_status()
-            html = resp.text
+        from bs4 import BeautifulSoup
 
-        # property then content
-        og_match = re.search(
-            r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
-            html,
-            re.IGNORECASE,
-        )
-        if not og_match:
-            # content then property
-            og_match = re.search(
-                r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
-                html,
-                re.IGNORECASE,
-            )
-        if not og_match:
-            return None
-
-        image_url = og_match.group(1).strip()
-        if not image_url.startswith("http"):
-            return None
-
-        return _download_image_data_uri(image_url)
-
-    except Exception as e:
-        logger.debug("og_image_fetch_failed", url=url, error=str(e))
+        soup = BeautifulSoup(html, "lxml")
+    except Exception:
         return None
+
+    for img in soup.find_all("img"):
+        src = (img.get("src") or img.get("data-src") or img.get("data-lazy-src") or "").strip()
+        if not src or src.startswith("data:") or _IMG_SKIP_PATTERN.search(src):
+            continue
+
+        for dim_attr in ("width", "height"):
+            dim = img.get(dim_attr)
+            if dim:
+                try:
+                    if int(re.sub(r"[^\d]", "", dim) or 0) < 150:
+                        src = ""
+                        break
+                except ValueError:
+                    pass
+        if not src:
+            continue
+
+        return src
+    return None
+
+
+def _fetch_og_image(url: str) -> str | None:
+    """
+    Fetch an editorial photo for an article URL and return a data URI.
+
+    Tries, in order, against a single page fetch: og:image, twitter:image,
+    link[rel=image_src], then the first substantial <img> in the body.
+    Returns None only if the page is unreachable or no candidate downloads.
+    """
+    html = _fetch_page_html(url)
+    if not html:
+        return None
+
+    candidates: list[tuple[str, str]] = []
+    meta_url = _extract_meta_image_url(html)
+    if meta_url:
+        candidates.append(("meta_tag", urljoin(url, meta_url)))
+    body_url = _extract_body_image_url(html)
+    if body_url:
+        candidates.append(("body_img", urljoin(url, body_url)))
+
+    for method, image_url in candidates:
+        if not image_url.startswith("http"):
+            continue
+        data_uri = _download_image_data_uri(image_url)
+        if data_uri:
+            logger.debug("story_image_method_used", method=method, url=url)
+            return data_uri
+
+    return None
 
 
 def _serper_image_search(headline: str) -> str | None:
@@ -359,20 +442,67 @@ def _serper_image_search(headline: str) -> str | None:
     return None
 
 
+def _wikipedia_image_search(query: str) -> str | None:
+    """
+    Keyless fallback: pull the lead image from the best-matching Wikipedia
+    article via the public MediaWiki API. No API key required, so unlike
+    Serper this always works in production regardless of configuration —
+    a topical stock photo beats an empty gradient when nothing else lands.
+    """
+    try:
+        with httpx.Client(timeout=6) as client:
+            resp = client.get(
+                "https://en.wikipedia.org/w/api.php",
+                params={
+                    "action": "query",
+                    "generator": "search",
+                    "gsrsearch": query,
+                    "gsrlimit": 1,
+                    "prop": "pageimages",
+                    "piprop": "original",
+                    "format": "json",
+                },
+                headers={"User-Agent": _HTTP_USER_AGENT},
+            )
+            resp.raise_for_status()
+            pages = resp.json().get("query", {}).get("pages", {})
+
+        for page in pages.values():
+            image_url = page.get("original", {}).get("source", "")
+            if image_url and image_url.startswith("http"):
+                data_uri = _download_image_data_uri(image_url)
+                if data_uri:
+                    logger.debug("wikipedia_image_found", query=query[:50])
+                    return data_uri
+
+    except Exception as e:
+        logger.debug("wikipedia_image_search_failed", query=query[:50], error=str(e))
+    return None
+
+
 def _fetch_story_image(source_url: str, headline: str) -> str | None:
     """
-    Get a relevant image for a story slide.
+    Get a relevant image for a story slide, trying progressively looser
+    methods until one produces a real downloadable photo:
 
-    1. OG image from the article URL (editorial photo chosen by the publisher)
-    2. Serper Google Images search for the story headline
-    3. Returns None → template renders the category gradient fallback
+    1. The article's own page: og:image → twitter:image → link[image_src]
+       → first substantial <img> in the body (all from one page fetch).
+    2. Serper Google Images search for the headline (needs SERPER_API_KEY;
+       silently skipped if not configured).
+    3. Wikipedia's lead image for the best-matching article (keyless,
+       always available) — a relevant stock photo beats no photo.
+    4. Returns None → template renders the category gradient fallback.
     """
     if source_url:
         data_uri = _fetch_og_image(source_url)
         if data_uri:
             return data_uri
 
-    return _serper_image_search(headline)
+    data_uri = _serper_image_search(headline)
+    if data_uri:
+        return data_uri
+
+    return _wikipedia_image_search(headline)
 
 
 def _build_category_breakdown(summaries: list[dict]) -> list[dict]:
@@ -391,18 +521,7 @@ def _build_category_breakdown(summaries: list[dict]) -> list[dict]:
 
 
 def _make_hti(size: tuple[int, int]):
-    from html2image import Html2Image
-
-    return Html2Image(
-        output_path=str(OUTPUT_DIR),
-        size=size,
-        custom_flags=[
-            "--no-sandbox",
-            "--hide-scrollbars",
-            "--disable-gpu",
-            "--disable-dev-shm-usage",
-        ],
-    )
+    return make_hti(OUTPUT_DIR, size)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -425,8 +544,9 @@ def _generate_cards(summaries: list[dict], run_id: str, env: Environment) -> lis
             run_id=run_id,
         )
         filename = f"card_{run_id}_{i}.png"
-        hti.screenshot(html_str=html, save_as=filename)
-        paths.append(str(OUTPUT_DIR / filename))
+        path = capture_slide(hti, html, filename, label=f"card_{i}", output_dir=OUTPUT_DIR)
+        if path:
+            paths.append(path)
 
     return paths
 
@@ -477,8 +597,9 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
         total_source_count=total_source_count,
     )
     name = f"carousel_{run_id}_cover.png"
-    hti.screenshot(html_str=html, save_as=name)
-    slide_pngs.append(str(OUTPUT_DIR / name))
+    path = capture_slide(hti, html, name, label="cover", output_dir=OUTPUT_DIR)
+    if path:
+        slide_pngs.append(path)
 
     # ── 2. One story slide per summary ────────────────────────
     for i, summary in enumerate(story_summaries):
@@ -518,20 +639,23 @@ def _generate_carousel_pdf(summaries: list[dict], run_id: str, env: Environment)
             reliability_label=_reliability_label(reliability_pct),
         )
         name = f"carousel_{run_id}_{i}.png"
-        hti.screenshot(html_str=html, save_as=name)
-        slide_pngs.append(str(OUTPUT_DIR / name))
+        path = capture_slide(hti, html, name, label=f"story_{i}", output_dir=OUTPUT_DIR)
+        if path:
+            slide_pngs.append(path)
 
     # ── 3. Closing / CTA slide ────────────────────────────────
     html = template.render(slide_type="closing")
     name = f"carousel_{run_id}_close.png"
-    hti.screenshot(html_str=html, save_as=name)
-    slide_pngs.append(str(OUTPUT_DIR / name))
+    path = capture_slide(hti, html, name, label="closing", output_dir=OUTPUT_DIR)
+    if path:
+        slide_pngs.append(path)
 
     # ── Combine PNGs → PDF ────────────────────────────────────
-    existing_pngs = [p for p in slide_pngs if Path(p).exists()]
-    missing = len(slide_pngs) - len(existing_pngs)
+    total_planned = total_slides + 2  # cover + stories + closing
+    existing_pngs = slide_pngs
+    missing = total_planned - len(existing_pngs)
     if missing:
-        logger.warning("carousel_slides_missing", missing=missing, total=len(slide_pngs))
+        logger.warning("carousel_slides_missing", missing=missing, total=total_planned)
 
     if not existing_pngs:
         logger.error("carousel_no_slides_rendered")

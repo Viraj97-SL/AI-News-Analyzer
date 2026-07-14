@@ -32,6 +32,11 @@ dependencies = [
     "newspaper4k>=0.9.3",
     "arxiv>=2.1.3",
     "httpx>=0.28.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.0.0",
+
+    # === LLM output parsing ===
+    "json-repair>=0.61.0",
 
     # === Email & publishing ===
     "requests-oauthlib>=2.0.0",

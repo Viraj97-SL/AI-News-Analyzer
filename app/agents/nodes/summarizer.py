@@ -30,9 +30,11 @@ settings = get_settings()
 
 def _parse_json_tolerant(text: str) -> list[dict]:
     """
-    Parse a JSON array, recovering from two common LLM failure modes:
+    Parse a JSON array, recovering from common LLM failure modes:
     - Extra data: LLM appended explanation text after the closing bracket.
     - Truncation: LLM hit a token/output limit mid-stream.
+    - Mid-document syntax errors: unescaped quotes/missing commas inside a
+      story body break strict parsing even though the array is complete.
     """
     try:
         return json.loads(text)
@@ -62,6 +64,21 @@ def _parse_json_tolerant(text: str) -> list[dict]:
                 return result
             except json.JSONDecodeError:
                 pass
+
+        # Last resort: mid-document syntax errors (unescaped quotes, missing
+        # commas) that the two targeted recoveries above don't cover. This is
+        # the only recovery path that keeps a whole run's summaries from being
+        # discarded over one malformed character deep in the LLM's output.
+        try:
+            from json_repair import repair_json
+
+            result = repair_json(text, return_objects=True)
+            if isinstance(result, list) and result:
+                logger.warning("json_repair_recovered", objects_recovered=len(result))
+                return result
+        except Exception:
+            pass
+
         raise
 
 
@@ -124,6 +141,7 @@ def analyze_node(state: PipelineState) -> dict:
             model=settings.model_classifier,
             temperature=0,
             google_api_key=settings.google_api_key,
+            response_mime_type="application/json",
         )
 
         batch = articles[:50]
@@ -242,6 +260,7 @@ def summarize_node(state: PipelineState) -> dict:
             model=settings.model_summarizer,
             temperature=0.3,
             google_api_key=settings.google_api_key,
+            response_mime_type="application/json",
         )
 
         # Sort by composite score: credibility + relevance + recency
@@ -353,6 +372,7 @@ def cluster_stories_node(state) -> dict:
             model=settings.model_classifier,
             temperature=0,
             google_api_key=settings.google_api_key,
+            response_mime_type="application/json",
         )
 
         batch = articles[:60]

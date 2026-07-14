@@ -717,8 +717,9 @@ def paperbanana_visual_node(state: PipelineState) -> dict:
         logger.warning("paperbanana_sdk_missing", hint="Falling back to html2image cyberpunk card.")
 
         try:
-            from html2image import Html2Image  # type: ignore[import]
             from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+            from app.agents.nodes.screenshot_utils import capture_slide, make_hti
 
             TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
             OUTPUT_DIR = Path("./output/images")
@@ -744,16 +745,7 @@ def paperbanana_visual_node(state: PipelineState) -> dict:
                 ).decode()
 
             # ── Render enhanced card ────────────────────────────────
-            hti = Html2Image(
-                output_path=str(OUTPUT_DIR),
-                size=(1200, 800),
-                custom_flags=[
-                    "--no-sandbox",
-                    "--hide-scrollbars",
-                    "--disable-gpu",
-                    "--disable-dev-shm-usage",
-                ],
-            )
+            hti = make_hti(OUTPUT_DIR, (1200, 800))
             env = Environment(
                 loader=FileSystemLoader(str(TEMPLATE_DIR)),
                 autoescape=select_autoescape(["html"]),
@@ -773,9 +765,10 @@ def paperbanana_visual_node(state: PipelineState) -> dict:
             )
 
             filename = f"research_card_{run_id}.png"
-            hti.screenshot(html_str=html, save_as=filename)
-            image_paths.insert(0, str(OUTPUT_DIR / filename))
-            logger.info("fallback_image_generated", path=filename)
+            path = capture_slide(hti, html, filename, label="research_card_fallback", output_dir=OUTPUT_DIR)
+            if path:
+                image_paths.insert(0, path)
+                logger.info("fallback_image_generated", path=filename)
 
         except Exception as fallback_error:
             logger.error("fallback_image_gen_failed", error=str(fallback_error))

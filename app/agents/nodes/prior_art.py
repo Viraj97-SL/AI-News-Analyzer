@@ -90,8 +90,9 @@ def prior_art_node(state: "PipelineState") -> dict:
 
     # ── 2. Render comparison card ─────────────────────────────────────────
     try:
-        from html2image import Html2Image  # type: ignore[import]
         from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+        from app.agents.nodes.screenshot_utils import capture_slide, make_hti
 
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         env = Environment(
@@ -104,19 +105,9 @@ def prior_art_node(state: "PipelineState") -> dict:
             comparison=comparison.model_dump(),
         )
 
-        hti = Html2Image(
-            output_path=str(OUTPUT_DIR),
-            size=(1200, 627),
-            custom_flags=[
-                "--no-sandbox",
-                "--hide-scrollbars",
-                "--disable-gpu",
-                "--disable-dev-shm-usage",
-            ],
-        )
+        hti = make_hti(OUTPUT_DIR, (1200, 627))
         filename = f"prior_art_card_{run_id}.png"
-        hti.screenshot(html_str=html, save_as=filename)
-        card_path = str(OUTPUT_DIR / filename)
+        card_path = capture_slide(hti, html, filename, label="prior_art_card", output_dir=OUTPUT_DIR) or ""
 
         logger.info("prior_art_card_generated", path=card_path)
         return {

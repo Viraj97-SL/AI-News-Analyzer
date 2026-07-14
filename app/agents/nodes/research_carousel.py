@@ -88,8 +88,9 @@ def research_carousel_node(state: "PipelineState") -> dict:
         }
 
     try:
-        from html2image import Html2Image  # type: ignore[import]
         from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+        from app.agents.nodes.screenshot_utils import capture_slide, make_hti
 
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -98,16 +99,7 @@ def research_carousel_node(state: "PipelineState") -> dict:
             autoescape=select_autoescape(["html"]),
         )
         template = env.get_template("research_carousel_slide.html")
-        hti = Html2Image(
-            output_path=str(OUTPUT_DIR),
-            size=(1080, 1080),
-            custom_flags=[
-                "--no-sandbox",
-                "--hide-scrollbars",
-                "--disable-gpu",
-                "--disable-dev-shm-usage",
-            ],
-        )
+        hti = make_hti(OUTPUT_DIR, (1080, 1080))
 
         # Strip section-header lines (─── LABEL ───) produced by the LinkedIn prompt
         # before extracting the hook, so those labels never appear on the cover slide.
@@ -213,10 +205,17 @@ def research_carousel_node(state: "PipelineState") -> dict:
             slide_name = slide_ctx["slide_type"]
             html = template.render(**slide_ctx)
             filename = f"research_carousel_{run_id}_{slide_name}.png"
-            hti.screenshot(html_str=html, save_as=filename)
-            slide_pngs.append(str(OUTPUT_DIR / filename))
+            path = capture_slide(hti, html, filename, label=slide_name, output_dir=OUTPUT_DIR)
+            if path:
+                slide_pngs.append(path)
 
-        existing = [p for p in slide_pngs if Path(p).exists()]
+        existing = slide_pngs
+        if len(existing) < total_slides:
+            logger.warning(
+                "research_carousel_slides_missing",
+                missing=total_slides - len(existing),
+                total=total_slides,
+            )
         if not existing:
             logger.error("research_carousel_no_slides_rendered")
             return {
