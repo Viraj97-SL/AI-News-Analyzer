@@ -107,7 +107,12 @@ def prior_art_node(state: "PipelineState") -> dict:
         hti = Html2Image(
             output_path=str(OUTPUT_DIR),
             size=(1200, 627),
-            custom_flags=["--no-sandbox", "--hide-scrollbars", "--disable-gpu"],
+            custom_flags=[
+                "--no-sandbox",
+                "--hide-scrollbars",
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+            ],
         )
         filename = f"prior_art_card_{run_id}.png"
         hti.screenshot(html_str=html, save_as=filename)

@@ -396,7 +396,12 @@ def _make_hti(size: tuple[int, int]):
     return Html2Image(
         output_path=str(OUTPUT_DIR),
         size=size,
-        custom_flags=["--no-sandbox", "--hide-scrollbars", "--disable-gpu"],
+        custom_flags=[
+            "--no-sandbox",
+            "--hide-scrollbars",
+            "--disable-gpu",
+            "--disable-dev-shm-usage",
+        ],
     )
 
 

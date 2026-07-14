@@ -747,7 +747,12 @@ def paperbanana_visual_node(state: PipelineState) -> dict:
             hti = Html2Image(
                 output_path=str(OUTPUT_DIR),
                 size=(1200, 800),
-                custom_flags=["--no-sandbox", "--hide-scrollbars", "--disable-gpu"],
+                custom_flags=[
+                    "--no-sandbox",
+                    "--hide-scrollbars",
+                    "--disable-gpu",
+                    "--disable-dev-shm-usage",
+                ],
             )
             env = Environment(
                 loader=FileSystemLoader(str(TEMPLATE_DIR)),
