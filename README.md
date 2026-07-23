@@ -20,9 +20,12 @@ Both pipelines feature Human-in-the-Loop (HITL) email approvals, dynamic cyberpu
 ## ✨ Key Features
 
 - **Dual-Brain Architecture:** Completely isolated state machines for News (`graph.py`) and Research (`research_graph.py`) to prevent cross-contamination of prompts and context.
-- **Agentic Paper Selection:** Uses Gemini 2.5 Flash to rapidly scan 50+ ArXiv abstracts and select the single most groundbreaking paper of the week.
-- **Deep Thematic Analysis:** Uses Gemini 2.5 Pro to act as a Principal Investigator, extracting the Core Problem, Methodology, Breakthroughs, and Limitations of dense academic papers.
-- **Dynamic Cyberpunk Visuals:** Uses a headless Chromium browser (`html2image`) with Jinja2 and CSS to generate aesthetic, data-rich graphical cards for both standard news and deep research grid layouts.
+- **Agentic Paper Ranking & Selection:** Uses Gemini 2.5 Flash to score every scraped ArXiv candidate on novelty, impact, technical depth, benchmark quality, and reproducibility, then selects the single most groundbreaking paper of the week (with a priority boost for manually curated papers).
+- **Full-Paper Grounded Analysis:** Downloads and parses the source PDF (PyMuPDF) to extract the Results, Ablation, and Experiment Setup sections beyond the abstract — cached to disk so figure extraction and text extraction never re-download the same PDF. Falls back to abstract-only mode with an explicit low-confidence flag when the PDF can't be fetched or parsed.
+- **Deep Thematic Analysis:** Uses Gemini 2.5 Pro to act as a Principal Investigator, extracting a 16-field breakdown — Core Problem, Methodology, Technical Innovation, Experiment Setup, Quantitative Results, Ablation Highlights, Real-World Applications, and a calibrated Significance Verdict — of dense academic papers.
+- **Render-Safe Text Pipeline:** Every LLM-produced string is normalized (LaTeX math and `\text{}`/super-subscript markup stripped and mapped to Unicode) and fit to each slide's character budget via LLM rewrite-on-overflow — with a sentence-boundary fallback, never a mid-word "..." — before it ever reaches a template.
+- **Figure Quality Gate:** Figures extracted from the ArXiv HTML/PDF are screened for luminance and color-dominance before use; unreadable figures (near-black plots, blank pages) are auto-corrected (contrast/inversion) or rejected in favor of the LLM-generated ASCII fallback.
+- **Dynamic Cyberpunk Visuals:** Uses a headless Chromium browser (`html2image`) with Jinja2 and CSS to generate data-rich graphical cards — radial score gauges, benchmark bar charts, prior-art comparison cards, and a variable-length (10–11 slide) LinkedIn carousel — for both standard news and deep research layouts.
 - **Human-in-the-Loop (HITL):** Pauses graph execution via LangGraph's `interrupt()` to send an admin email via Resend with secure, HMAC-signed JWT tokens for one-click **Approve** or **Reject** publishing.
 - **Future-Proofed for PaperBanana:** Built-in hooks to integrate cutting-edge agentic flowchart generation (PaperBanana) with automatic fallbacks to HTML-rendered visuals.
 
@@ -80,11 +83,24 @@ Both pipelines feature Human-in-the-Loop (HITL) email approvals, dynamic cyberpu
 5. **Approval:** Halts state and awaits human email approval to publish.
 
 ### 2. 🔬 The Research Pipeline (Runs Thursdays)
-1. **Narrow Scraping:** Exclusively pulls from ArXiv (`cs.AI`, `cs.LG`, etc.).
-2. **Select Best Paper:** Evaluates novelty and impact to isolate *one* primary paper.
-3. **Deep Analysis:** Generates a highly technical breakdown (Problem, Methodology, Limitations).
-4. **Visual Diagramming:** Generates a highly detailed Research Diagnostic grid card.
-5. **Approval:** Halts state and awaits human email approval to publish the deep dive.
+1. **Narrow Scraping:** Exclusively pulls from ArXiv (`cs.AI`, `cs.LG`, etc.), plus any manually curated papers.
+2. **Rank & Select:** Scores every candidate on novelty/impact/technical depth/benchmark quality/reproducibility and isolates *one* primary paper.
+3. **Fetch Full Text:** Downloads the source PDF and extracts the Results, Ablation, and Experiment Setup sections beyond the abstract (cached to disk; degrades to abstract-only + low-confidence flag if unavailable).
+4. **Deep Analysis:** Gemini 2.5 Pro produces a 16-field technical breakdown grounded in the full paper where available.
+5. **Scoring & Media Gen:** Renders score gauges, a benchmark bar chart, a prior-art comparison card, and quality-filtered figures (or an LLM-generated architecture diagram fallback).
+6. **Carousel Assembly:** Every text field is LaTeX-normalized and fit to its slide's character budget before a 10–11 slide LinkedIn carousel PDF is rendered.
+7. **Approval:** Halts state and awaits human email approval to publish the deep dive.
+
+---
+
+## 🆕 Recent Improvements
+
+**2026-07-23 — Research carousel correctness + full-text grounding**
+- Fixed LaTeX/math markup (`$...$`, `\text{}`, `^`/`_` sub-superscripts) leaking into rendered slide titles and body text; every LLM-produced string now passes through a normalization step before rendering.
+- Fixed mid-word truncation on long slides: text fields are now fit to each slide's character budget at the generation layer (LLM rewrite-on-overflow, sentence-boundary fallback) instead of being silently clipped by CSS.
+- Added a figure quality gate: extracted paper figures are screened for luminance/color-dominance, with auto-contrast/inversion recovery before falling back to a generated diagram — fixes near-black/unreadable extracted plots.
+- Added full-text PDF grounding: the pipeline now downloads and parses the source PDF to pull the Results, Ablation, and Experiment Setup sections into the analysis prompt, instead of analyzing the abstract alone. PDF downloads are disk-cached and shared between figure extraction and text extraction.
+- News pipeline unchanged.
 
 ---
 

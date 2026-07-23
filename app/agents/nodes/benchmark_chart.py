@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 if TYPE_CHECKING:
     from app.agents.state import PipelineState
 
+from app.agents.nodes.text_utils import normalize_text
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
@@ -71,6 +72,13 @@ def benchmark_chart_node(state: "PipelineState") -> dict:
     if not extraction.metrics:
         logger.info("no_benchmark_metrics_found")
         return {"benchmark_metrics": [], "benchmark_chart_path": "", "current_step": "benchmark_skipped"}
+
+    extraction = BenchmarkExtraction(
+        metrics=[
+            m.model_copy(update={"metric_name": normalize_text(m.metric_name)})
+            for m in extraction.metrics
+        ]
+    )
 
     # ── 2. Render chart (stat card for a lone metric, bar chart otherwise) ─
     try:

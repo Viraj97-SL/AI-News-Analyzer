@@ -13,12 +13,15 @@ from pydantic import BaseModel, Field
 from app.agents.nodes.approval import human_approval_node
 from app.agents.nodes.architecture_diagram import architecture_diagram_node
 from app.agents.nodes.benchmark_chart import benchmark_chart_node
+from app.agents.nodes.full_text import fetch_full_text_node
 from app.agents.nodes.manual_papers import load_manual_papers_node
 from app.agents.nodes.paper_ranker import rank_papers_node
 from app.agents.nodes.prior_art import prior_art_node
 from app.agents.nodes.research_carousel import research_carousel_node
 from app.agents.nodes.scraper import scrape_arxiv_node
 from app.agents.nodes.svg_gauge import render_gauge_svg
+from app.agents.nodes.text_budget import enforce_char_budgets
+from app.agents.nodes.text_utils import normalize_model_strings, normalize_text, normalize_title
 from app.agents.state import PipelineState
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -186,7 +189,8 @@ def select_paper_node(state: PipelineState) -> dict:
                     source=article.get("source", "arxiv"),
                     is_manual=ranked.get("is_manual", False),
                 )
-                return {"chosen_research_paper": article, "current_step": "paper_selected"}
+                clean_article = {**article, "title": normalize_title(article["title"])}
+                return {"chosen_research_paper": clean_article, "current_step": "paper_selected"}
 
     # ── Fallback: LLM selection ────────────────────────────────────────
     logger.info("using_llm_fallback_selection", reason="no_rankings_available")
@@ -212,7 +216,8 @@ def select_paper_node(state: PipelineState) -> dict:
     result = (prompt | llm).invoke({"papers": papers_text})
     chosen_paper = next((a for a in articles if a["url"] == result.chosen_url), articles[0])
     logger.info("paper_selected_by_llm", title=chosen_paper["title"])
-    return {"chosen_research_paper": chosen_paper, "current_step": "paper_selected"}
+    clean_paper = {**chosen_paper, "title": normalize_title(chosen_paper["title"])}
+    return {"chosen_research_paper": clean_paper, "current_step": "paper_selected"}
 
 
 _LINKEDIN_RESEARCH_SYSTEM = """\
@@ -442,6 +447,28 @@ def deep_analysis_node(state: PipelineState) -> dict:
     if not paper:
         return {"current_step": "error_no_paper"}
 
+    paper_sections = state.get("paper_sections", {}) or {}
+    full_text_available = state.get("full_text_available", False)
+
+    content = paper["content"]
+    if full_text_available and paper_sections:
+        extra_sections = "\n\n".join(
+            f"--- {name.replace('_', ' ').upper()} (FROM FULL PAPER) ---\n{text}"
+            for name, text in paper_sections.items()
+        )
+        content = f"{content}\n\n{extra_sections}"
+
+    low_confidence_note = (
+        ""
+        if full_text_available
+        else (
+            "\n\nNOTE: Only the paper's abstract is available — no full-text sections "
+            "could be retrieved. Extract what you can from the abstract and explicitly "
+            "flag in experiment_setup, quantitative_results, and ablation_highlights "
+            "that full-paper details were not accessible, rather than guessing."
+        )
+    )
+
     # ── 1. Rich structured analysis (Gemini 2.5 Pro) ──────────────────────
     analysis_llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-pro",
@@ -459,18 +486,23 @@ def deep_analysis_node(state: PipelineState) -> dict:
          "NEVER use 'we', 'our', or 'I' to refer to the paper's contributions or methods. "
          "Be specific, calibrated, and honest. Avoid marketing speak or generic praise. "
          "If the content is only an abstract, extract what you can and clearly note where "
-         "full-paper details are needed."),
+         "full-paper details are needed." + low_confidence_note),
         ("user", "Title: {title}\n\nPaper Content:\n{content}"),
     ])
 
     try:
         analysis: RichDeepAnalysis = (analysis_prompt | analysis_llm).invoke({
             "title": paper["title"],
-            "content": paper["content"],
+            "content": content,
         })
     except Exception as e:
         logger.error("rich_analysis_failed", error=str(e))
         return {"current_step": "error_analysis_failed"}
+
+    # ── 1b. Normalize LaTeX leaks, then fit carousel fields to char budgets ─
+    analysis = normalize_model_strings(analysis)  # type: ignore[assignment]
+    budgeted_dict = enforce_char_budgets(analysis.model_dump(), paper["title"])
+    analysis = RichDeepAnalysis(**budgeted_dict)
 
     # ── 2. LinkedIn draft via LLM (Gemini 2.5 Flash) ─────────────────────
     flash_llm = ChatGoogleGenerativeAI(
@@ -524,6 +556,8 @@ def deep_analysis_node(state: PipelineState) -> dict:
             f"#AIResearch #MachineLearning #DeepLearning"
         )
 
+    linkedin_draft = normalize_text(linkedin_draft)
+
     # ── 3. Full research article HTML for email newsletter ────────────────
     newsletter_html = _build_research_article_html(paper, analysis)
 
@@ -533,6 +567,7 @@ def deep_analysis_node(state: PipelineState) -> dict:
         contributions=len(analysis.key_contributions),
         results=len(analysis.quantitative_results),
         linkedin_chars=len(linkedin_draft),
+        analysis_confidence=state.get("analysis_confidence", "high"),
     )
 
     return {
@@ -858,6 +893,7 @@ def build_research_graph(checkpointer=None) -> StateGraph:
     workflow.add_node("select_paper",       select_paper_node)
 
     # ── Intelligence pipeline ─────────────────────────────────────────────────
+    workflow.add_node("fetch_full_text",      fetch_full_text_node)       # full-text PDF sections
     workflow.add_node("deep_analysis",        deep_analysis_node)
     workflow.add_node("score_research",       score_research_node)       # F8: gauges
     workflow.add_node("score_hook",           score_hook_node)            # F1: hook quality
@@ -880,7 +916,8 @@ def build_research_graph(checkpointer=None) -> StateGraph:
     workflow.add_edge("scrape_arxiv",       "rank_papers")
     workflow.add_edge("load_manual_papers", "rank_papers")
     workflow.add_edge("rank_papers",        "select_paper")
-    workflow.add_edge("select_paper",       "deep_analysis")
+    workflow.add_edge("select_paper",       "fetch_full_text")
+    workflow.add_edge("fetch_full_text",    "deep_analysis")
     workflow.add_edge("deep_analysis",      "score_research")
     workflow.add_edge("score_research",     "score_hook")
     workflow.add_edge("score_hook",         "benchmark_chart")

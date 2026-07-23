@@ -18,13 +18,15 @@ from __future__ import annotations
 
 import base64
 import io
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.agents.state import PipelineState
 
+from app.agents.nodes.arxiv_utils import extract_arxiv_id
+from app.agents.nodes.figure_quality import assess_and_correct
+from app.agents.nodes.pdf_cache import fetch_pdf_bytes
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
@@ -36,10 +38,24 @@ OUTPUT_DIR = Path("./output/images")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _extract_arxiv_id(paper_url: str) -> str:
-    """Return bare ArXiv ID (e.g. '2301.07685') from any URL format."""
-    raw = paper_url.rstrip("/").split("/")[-1]
-    return re.sub(r"v\d+$", "", raw)
+def _filter_by_quality(candidates: list[tuple[bytes, str]]) -> list[tuple[bytes, str]]:
+    """Drop figures that are too dark or too uniform to read; use the
+    auto-contrast/inverted version when correction was needed to pass."""
+    min_luminance = settings.figure_min_luminance
+    max_dominant_ratio = settings.figure_max_dominant_color_ratio
+
+    accepted: list[tuple[bytes, str]] = []
+    for image_bytes, caption in candidates:
+        result = assess_and_correct(image_bytes, min_luminance, max_dominant_ratio)
+        if not result.passed:
+            logger.warning(
+                "figure_rejected_low_quality",
+                mean_luminance=round(result.mean_luminance, 1),
+                dominant_color_ratio=round(result.dominant_color_ratio, 2),
+            )
+            continue
+        accepted.append((result.corrected_bytes or image_bytes, caption))
+    return accepted
 
 
 # ── Strategy 1: ArXiv HTML figures ───────────────────────────────────────────
@@ -125,17 +141,14 @@ def _fetch_pdf_figures(paper_url: str) -> list[tuple[bytes, str]]:
     """
     try:
         import fitz  # type: ignore[import]  # PyMuPDF
-        import httpx
         from PIL import Image as PILImage
 
-        pdf_url = paper_url.replace("/abs/", "/pdf/")
-        logger.info("fetching_arxiv_pdf", url=pdf_url)
+        arxiv_id = extract_arxiv_id(paper_url)
+        pdf_bytes = fetch_pdf_bytes(paper_url, arxiv_id)
+        if not pdf_bytes:
+            return []
 
-        with httpx.Client(timeout=30, follow_redirects=True) as client:
-            resp = client.get(pdf_url, headers={"User-Agent": "research-analyzer/1.0"})
-            resp.raise_for_status()
-
-        doc = fitz.Document(stream=resp.content, filetype="pdf")  # type: ignore[call-arg]
+        doc = fitz.Document(stream=pdf_bytes, filetype="pdf")  # type: ignore[call-arg]
         candidates: list[tuple[float, bytes]] = []  # (score, raw_bytes)
 
         diagram_keywords = frozenset(
@@ -244,7 +257,7 @@ def architecture_diagram_node(state: "PipelineState") -> dict:
     run_id = state.get("run_id", "dev")
 
     paper_url = paper.get("url", "")
-    arxiv_id = _extract_arxiv_id(paper_url) if paper_url else ""
+    arxiv_id = extract_arxiv_id(paper_url) if paper_url else ""
     methodology = analysis.get("methodology", "")
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -259,11 +272,11 @@ def architecture_diagram_node(state: "PipelineState") -> dict:
     # ── Strategy 1: ArXiv HTML ─────────────────────────────────────────
     figures: list[tuple[bytes, str]] = []
     if arxiv_id:
-        figures = _fetch_html_figures(arxiv_id)
+        figures = _filter_by_quality(_fetch_html_figures(arxiv_id))
 
     # ── Strategy 2: PyMuPDF PDF ────────────────────────────────────────
     if not figures and paper_url:
-        figures = _fetch_pdf_figures(paper_url)
+        figures = _filter_by_quality(_fetch_pdf_figures(paper_url))
 
     # ── Successful extraction ──────────────────────────────────────────
     if figures:

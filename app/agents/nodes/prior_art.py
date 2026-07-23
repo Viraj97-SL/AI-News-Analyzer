@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 if TYPE_CHECKING:
     from app.agents.state import PipelineState
 
+from app.agents.nodes.text_utils import normalize_text
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
@@ -38,6 +39,22 @@ class PriorArtComparison(BaseModel):
     prior_paper_name: str = Field(description="Name of the main competing method or paper")
     dimensions: list[ComparisonDimension] = Field(description="3–5 comparison dimensions")
     overall_verdict: str = Field(description="One sentence summarising the net advancement")
+
+
+def _normalize_comparison(comparison: PriorArtComparison) -> PriorArtComparison:
+    """Strip LaTeX markup from every string field, including nested dimensions."""
+    return comparison.model_copy(update={
+        "prior_paper_name": normalize_text(comparison.prior_paper_name),
+        "overall_verdict": normalize_text(comparison.overall_verdict),
+        "dimensions": [
+            dim.model_copy(update={
+                "dimension": normalize_text(dim.dimension),
+                "new_paper": normalize_text(dim.new_paper),
+                "prior_sota": normalize_text(dim.prior_sota),
+            })
+            for dim in comparison.dimensions
+        ],
+    })
 
 
 def prior_art_node(state: "PipelineState") -> dict:
@@ -80,6 +97,7 @@ def prior_art_node(state: "PipelineState") -> dict:
             "methodology": analysis.get("methodology", ""),
             "breakthroughs": analysis.get("breakthroughs", ""),
         })
+        comparison = _normalize_comparison(comparison)
     except Exception as e:
         logger.error("prior_art_extraction_failed", error=str(e))
         return {

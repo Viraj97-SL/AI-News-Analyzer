@@ -73,6 +73,11 @@ class PipelineState(TypedDict):
     paper_rankings: NotRequired[list[dict]]  # scored+sorted list from rank_papers_node
     paper_figures: NotRequired[list[dict]]   # [{b64: str, caption: str}] from architecture_diagram_node
 
+    # ── Full-text extraction (fetch_full_text_node) ──────────
+    paper_sections: NotRequired[dict[str, str]]  # {"results": ..., "ablation": ..., "experiment_setup": ...}
+    full_text_available: NotRequired[bool]       # False when PDF fetch/parse failed — abstract-only mode
+    analysis_confidence: NotRequired[str]        # "high" | "low" — low means abstract-only analysis
+
     # ── Research Analyst Enhancements ───────────────────────
     research_scores: NotRequired[dict]                     # F8: novelty/clarity/benchmarks/reproducibility 1-10
     hook_score: NotRequired[dict]                          # F1: hook quality scores

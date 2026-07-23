@@ -306,18 +306,21 @@ class TestDeepAnalysisNode:
         """If the Flash LinkedIn call fails, a template draft is returned instead of crashing."""
         analysis = make_rich_analysis()
         mock_structured_chain = MagicMock()
-        mock_structured_chain.invoke.return_value = analysis
+        mock_structured_chain.return_value = analysis          # callable path
+        mock_structured_chain.invoke.return_value = analysis   # .invoke() path
         mock_pro = MagicMock()
         mock_pro.with_structured_output.return_value = mock_structured_chain
 
         mock_flash = MagicMock()
-        mock_flash.invoke.side_effect = RuntimeError("Rate limit")
+        mock_flash.side_effect = RuntimeError("Rate limit")          # callable path
+        mock_flash.invoke.side_effect = RuntimeError("Rate limit")   # .invoke() path
 
         with patch("app.agents.research_graph.ChatGoogleGenerativeAI") as MockLLM:
             MockLLM.side_effect = [mock_pro, mock_flash]
             result = deep_analysis_node({"chosen_research_paper": make_paper()})
 
         assert result["linkedin_draft"]  # non-empty fallback
+        assert isinstance(result["linkedin_draft"], str)
         assert result["current_step"] == "analysis_complete"
 
     def test_analysis_node_error_propagates_on_pro_failure(self):

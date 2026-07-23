@@ -115,6 +115,38 @@ class Settings(BaseSettings):
     scraper_max_retries: int = 3
     scraper_backoff_base: float = 2.0
 
+    # ── Research carousel: figure quality gate ───────────────
+    figure_min_luminance: float = Field(
+        default=40.0,
+        description="0-255 grayscale mean below which an extracted figure is rejected as unreadable",
+    )
+    figure_max_dominant_color_ratio: float = Field(
+        default=0.75,
+        description="Reject figures where one grayscale value covers more than this fraction of pixels",
+    )
+
+    # ── Research carousel: text char budgets ─────────────────
+    carousel_body_char_budget: int = Field(
+        default=650,
+        description="Max characters for long-form carousel fields (core_problem, methodology, "
+        "experiment_setup, ablation_highlights, breakthroughs)",
+    )
+    carousel_short_char_budget: int = Field(
+        default=260,
+        description="Max characters for short carousel fields (technical_innovation, "
+        "ecosystem_impact, expert_interpretation, limitations)",
+    )
+    carousel_text_max_retries: int = Field(
+        default=2,
+        description="Max LLM re-request attempts when a carousel field exceeds its char budget",
+    )
+
+    # ── Research pipeline: full-text extraction ──────────────
+    full_text_section_max_chars: int = Field(
+        default=4000,
+        description="Max characters extracted per target section (Results/Ablation/Setup) from the full PDF",
+    )
+
     # ── Cost guardrails ─────────────────────────────────────
     max_cost_per_run: float = Field(
         default=5.0, description="Hard stop if estimated cost exceeds this ($)"
