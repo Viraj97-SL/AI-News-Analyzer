@@ -18,6 +18,12 @@
       --line:   rgba(14,165,233,0.06);
       --text:   #0F172A;   /* Slate-900 */
       --muted:  #64748B;   /* Slate-500 */
+
+      /* Role-based accents (design spec: one colour per ROLE, not per slide-type).
+         Matches app/agents/nodes/svg_gauge.py's ACCENT_* constants exactly. */
+      --accent-contribution:    #0EA5E9; /* this paper's own contribution/verified numbers */
+      --accent-prior-art-grey:  #64748B; /* prior art / comparison / baseline content */
+      --accent-unverified-amber: #D97706; /* unverified or missing claim */
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -225,8 +231,54 @@
       color: var(--muted);
     }
 
-    .winner-new  { color: var(--green); font-weight: 700; }
-    .winner-prior { color: var(--pink);  font-weight: 600; }
+    .winner-new  { color: var(--accent-contribution);   font-weight: 700; }
+    .winner-prior { color: var(--accent-prior-art-grey); font-weight: 600; }
+
+    /* ── Spec-card grid (Experiment Setup) ───────────────── */
+    .spec-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .spec-tile {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 18px;
+    }
+
+    .spec-tile.not-reported {
+      background: rgba(217,119,6,0.04);
+      border: 1px dashed rgba(217,119,6,0.4);
+    }
+
+    .spec-tile-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .spec-tile-value {
+      font-size: 17px;
+      line-height: 1.4;
+      color: var(--text);
+    }
+
+    .spec-tile.not-reported .spec-tile-value {
+      color: var(--accent-unverified-amber);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Claims-vs-evidence table (Results) ──────────────── */
+    .evidence-quantified { color: var(--accent-contribution); font-weight: 700; }
+    .evidence-qualitative,
+    .evidence-absent { color: var(--accent-unverified-amber); font-weight: 700; }
 
     .winner-badge {
       font-size: 9px;
@@ -250,7 +302,7 @@
 
     .metric-arrow {
       font-size: 18px;
-      color: var(--green);
+      color: var(--accent-contribution);
       flex-shrink: 0;
       font-family: 'JetBrains Mono', monospace;
       font-weight: 700;
@@ -493,6 +545,33 @@
 
 
 {# ══════════════════════════════════════════════════════════════════════════════
+   OPTIONAL SLIDE · HOOK STAT (single most surprising number, alone on the slide)
+══════════════════════════════════════════════════════════════════════════════ #}
+{% elif slide_type == "hook_stat" %}
+<div class="slide">
+  <div class="top-bar">
+    <div class="sys-label">ARXIV // THE HEADLINE NUMBER</div>
+  </div>
+
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+              text-align:center;gap:20px;min-height:0">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:220px;font-weight:800;
+                line-height:1;color:var(--accent-contribution);letter-spacing:-4px;
+                overflow-wrap:anywhere">
+      {{ hook_stat_value }}
+    </div>
+    {% if hook_stat_label %}
+    <div class="body-text" style="font-size:24px;font-weight:600;color:var(--muted);max-width:820px">
+      {{ hook_stat_label }}
+    </div>
+    {% endif %}
+  </div>
+
+  {{ progress_footer(slide_num, total_slides, "The Number") }}
+</div>
+
+
+{# ══════════════════════════════════════════════════════════════════════════════
    SLIDE 2 · THE PROBLEM
 ══════════════════════════════════════════════════════════════════════════════ #}
 {% elif slide_type == "problem" %}
@@ -530,13 +609,13 @@
 <div class="slide">
   <div class="top-bar">
     <div class="sys-label">ARXIV // PRIOR ART</div>
-    <div class="badge" style="color:var(--pink);background:rgba(225,29,72,0.07);border:1px solid rgba(225,29,72,0.25)">
+    <div class="badge" style="color:var(--accent-prior-art-grey);background:rgba(100,116,139,0.07);border:1px solid rgba(100,116,139,0.25)">
       VS PRIOR SOTA
     </div>
   </div>
 
-  <div class="section-eyebrow" style="color:var(--pink)">How does it compare?</div>
-  <div class="section-title" style="color:var(--pink);font-size:46px">Prior Art<br>vs This Paper</div>
+  <div class="section-eyebrow" style="color:var(--accent-prior-art-grey)">How does it compare?</div>
+  <div class="section-title" style="color:var(--accent-prior-art-grey);font-size:46px">Prior Art<br>vs This Paper</div>
 
   <div style="flex:1;display:flex;flex-direction:column;gap:16px;min-height:0;overflow:hidden">
     {% if prior_art and prior_art.dimensions %}
@@ -561,11 +640,11 @@
               <td class="dim-name">{{ dim.dimension }}</td>
               <td class="{{ 'winner-prior' if dim.winner == 'prior' else '' }}">
                 {{ dim.prior_sota }}
-                {% if dim.winner == "prior" %}<span class="winner-badge" style="background:rgba(225,29,72,0.08);color:var(--pink)">WINS</span>{% endif %}
+                {% if dim.winner == "prior" %}<span class="winner-badge" style="background:rgba(100,116,139,0.08);color:var(--accent-prior-art-grey)">WINS</span>{% endif %}
               </td>
               <td class="{{ 'winner-new' if dim.winner == 'new' else '' }}">
                 {{ dim.new_paper }}
-                {% if dim.winner == "new" %}<span class="winner-badge" style="background:rgba(5,150,105,0.08);color:var(--green)">WINS</span>{% endif %}
+                {% if dim.winner == "new" %}<span class="winner-badge" style="background:rgba(14,165,233,0.08);color:var(--accent-contribution)">WINS</span>{% endif %}
               </td>
             </tr>
             {% endfor %}
@@ -573,16 +652,16 @@
         </table>
       </div>
       {% if prior_art.overall_verdict %}
-      <div class="callout" style="font-size:16px;border-left-color:var(--pink);flex-shrink:0;
-                                   background:rgba(225,29,72,0.04);border-color:rgba(225,29,72,0.2)">
-        <strong style="color:var(--pink)">VERDICT:</strong> {{ prior_art.overall_verdict }}
+      <div class="callout" style="font-size:16px;border-left-color:var(--accent-prior-art-grey);flex-shrink:0;
+                                   background:rgba(100,116,139,0.04);border-color:rgba(100,116,139,0.2)">
+        <strong style="color:var(--accent-prior-art-grey)">VERDICT:</strong> {{ prior_art.overall_verdict }}
       </div>
       {% endif %}
     {% else %}
       <!-- Fallback: what's new vs prior work -->
       <div class="callout" style="font-size:19px;line-height:1.7;flex:1;overflow:hidden;
-                                   border-left-color:var(--pink);
-                                   background:rgba(225,29,72,0.04);border-color:rgba(225,29,72,0.2);
+                                   border-left-color:var(--accent-prior-art-grey);
+                                   background:rgba(100,116,139,0.04);border-color:rgba(100,116,139,0.2);
                                    display:-webkit-box;-webkit-line-clamp:10;
                                    -webkit-box-orient:vertical">
         {{ technical_innovation }}
@@ -603,14 +682,16 @@
     <div class="sys-label">ARXIV // METHODOLOGY</div>
   </div>
 
-  <div class="section-eyebrow" style="color:var(--purple)">How did they do it?</div>
-  <div class="section-title" style="color:var(--purple)">The Core<br>Approach</div>
+  <div class="section-eyebrow" style="color:var(--accent-contribution)">How did they do it?</div>
+  <div class="section-title" style="color:var(--accent-contribution)">The Core<br>Approach</div>
 
   {% set has_diagram_image = architecture_diagram_b64 and architecture_diagram_b64|trim %}
-  {% set has_arch = has_diagram_image or architecture_fallback_text %}
+  {% set has_spec_svg = architecture_spec_svg and architecture_spec_svg|trim %}
+  {% set has_arch = has_diagram_image or has_spec_svg or architecture_fallback_text %}
   <div style="flex:1;display:flex;flex-direction:column;gap:16px;min-height:0;overflow:hidden">
     {% if has_arch %}
-    <!-- Two-column: text left, architecture diagram (or ASCII fallback) right -->
+    <!-- Two-column: text left, architecture diagram (extracted figure, generated
+         spec diagram, or ASCII fallback, in that preference order) right -->
     <div style="display:flex;gap:18px;flex:1;min-height:0">
       <div style="flex:1;display:flex;flex-direction:column;gap:14px;min-height:0;overflow:hidden">
         <div class="body-text" style="font-size:18px;overflow:hidden;
@@ -618,11 +699,11 @@
           {{ methodology }}
         </div>
         {% if technical_innovation %}
-        <div style="background:rgba(124,58,237,0.05);border:1px solid rgba(124,58,237,0.2);
-                    border-left:4px solid var(--purple);border-radius:8px;
+        <div style="background:rgba(14,165,233,0.05);border:1px solid rgba(14,165,233,0.2);
+                    border-left:4px solid var(--accent-contribution);border-radius:8px;
                     padding:13px 18px;font-size:15px;color:var(--muted);line-height:1.6;
                     overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">
-          <strong style="color:var(--purple);font-family:'JetBrains Mono',monospace;font-size:10px;
+          <strong style="color:var(--accent-contribution);font-family:'JetBrains Mono',monospace;font-size:10px;
                          letter-spacing:2px;text-transform:uppercase;display:block;margin-bottom:5px">
             What's new
           </strong>
@@ -630,7 +711,7 @@
         </div>
         {% endif %}
       </div>
-      <!-- Architecture diagram / ASCII fallback -->
+      <!-- Architecture diagram: extracted figure > generated spec diagram > ASCII fallback -->
       <div style="width:370px;flex-shrink:0;border-radius:10px;overflow:hidden;
                   border:1px solid var(--border);background:var(--card)">
         <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);
@@ -641,6 +722,11 @@
         {% if has_diagram_image %}
         <img src="data:image/png;base64,{{ architecture_diagram_b64 }}"
              style="width:100%;height:calc(100% - 30px);object-fit:contain;display:block">
+        {% elif has_spec_svg %}
+        <div style="height:calc(100% - 30px);overflow:hidden;padding:10px;
+                    display:flex;align-items:center;justify-content:center">
+          {{ architecture_spec_svg | safe }}
+        </div>
         {% else %}
         <div style="height:calc(100% - 30px);overflow:hidden;padding:6px">
           {{ architecture_fallback_text | safe }}
@@ -655,11 +741,11 @@
       {{ methodology }}
     </div>
     {% if technical_innovation %}
-    <div style="background:rgba(124,58,237,0.05);border:1px solid rgba(124,58,237,0.2);
-                border-left:4px solid var(--purple);border-radius:8px;
+    <div style="background:rgba(14,165,233,0.05);border:1px solid rgba(14,165,233,0.2);
+                border-left:4px solid var(--accent-contribution);border-radius:8px;
                 padding:15px 20px;font-size:16px;color:var(--muted);line-height:1.6;
                 overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">
-      <strong style="color:var(--purple);font-family:'JetBrains Mono',monospace;font-size:10px;
+      <strong style="color:var(--accent-contribution);font-family:'JetBrains Mono',monospace;font-size:10px;
                      letter-spacing:2px;text-transform:uppercase;display:block;margin-bottom:5px">
         What's new
       </strong>
@@ -756,8 +842,25 @@
   <div class="section-eyebrow" style="color:var(--amber)">How was it tested?</div>
   <div class="section-title" style="color:var(--amber)">Experiment<br>Setup</div>
 
+  {% set spec_fields = [
+    ("Dataset", experiment_spec.dataset if experiment_spec else ""),
+    ("Baselines", experiment_spec.baselines if experiment_spec else ""),
+    ("Metrics", experiment_spec.metrics if experiment_spec else ""),
+    ("Compute", experiment_spec.compute if experiment_spec else ""),
+  ] %}
   <div style="flex:1;overflow:hidden">
-    {% if experiment_setup %}
+    {% if experiment_spec %}
+      <!-- Spec-card grid: Dataset / Baselines / Metrics / Compute -->
+      <div class="spec-grid">
+        {% for label, value in spec_fields %}
+        {% set not_reported = value and value|trim|upper == "NOT REPORTED" %}
+        <div class="spec-tile{{ ' not-reported' if not_reported else '' }}">
+          <div class="spec-tile-label">{{ label }}</div>
+          <div class="spec-tile-value">{{ value if value else "NOT REPORTED" }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    {% elif experiment_setup %}
       <div class="callout" style="font-size:19px;line-height:1.72;
                                    border-left-color:var(--amber);
                                    background:rgba(217,119,6,0.04);
@@ -785,21 +888,64 @@
 <div class="slide">
   <div class="top-bar">
     <div class="sys-label">ARXIV // RESULTS</div>
-    <div class="badge" style="color:var(--green);background:rgba(5,150,105,0.07);border:1px solid rgba(5,150,105,0.25)">
+    <div class="badge" style="color:var(--accent-contribution);background:rgba(14,165,233,0.07);border:1px solid rgba(14,165,233,0.25)">
       BENCHMARKS
     </div>
   </div>
 
-  <div class="section-eyebrow" style="color:var(--green)">What did they prove?</div>
-  <div class="section-title" style="color:var(--green)">Quantitative<br>Results</div>
+  <div class="section-eyebrow" style="color:var(--accent-contribution)">What did they prove?</div>
+  <div class="section-title" style="color:var(--accent-contribution)">Quantitative<br>Results</div>
 
-  {% if not quantitative_results and benchmark_chart_b64 %}
+  {% if claims_evidence %}
+  <!-- Claims-vs-evidence table: the claim on the left, an honest evidence-strength
+       rating on the right, so hand-waving can't hide behind prose. -->
+  <div style="flex:1;display:flex;gap:18px;min-height:0;overflow:hidden">
+    <div style="flex:1;overflow:hidden">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Claim</th>
+            <th>Evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in claims_evidence[:6] %}
+          <tr>
+            <td>{{ c.claim }}</td>
+            <td>
+              {% if c.evidence_status == "quantified" %}
+                <span class="evidence-quantified">✓ Quantified</span>
+              {% elif c.evidence_status == "qualitative" %}
+                <span class="evidence-qualitative">⚠ Qualitative only</span>
+              {% else %}
+                <span class="evidence-absent">✗ Absent</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if benchmark_chart_b64 %}
+    <div style="width:380px;flex-shrink:0;border-radius:10px;overflow:hidden;
+                border:1px solid var(--border);background:var(--card)">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);
+                  letter-spacing:1.5px;text-transform:uppercase;
+                  padding:8px 12px;border-bottom:1px solid var(--border);background:#F8FAFC">
+        BENCHMARK COMPARISON
+      </div>
+      <img src="data:image/png;base64,{{ benchmark_chart_b64 }}"
+           style="width:100%;height:calc(100% - 30px);object-fit:contain;display:block;padding:8px">
+    </div>
+    {% endif %}
+  </div>
+  {% elif not quantitative_results and benchmark_chart_b64 %}
   <!-- No structured metrics list — let the chart take the full width -->
   <div style="flex:1;display:flex;flex-direction:column;gap:18px;min-height:0;overflow:hidden">
     <div class="callout" style="font-size:17px;line-height:1.6;flex-shrink:0;
-                                 border-left-color:var(--green);
-                                 background:rgba(5,150,105,0.04);
-                                 border-color:rgba(5,150,105,0.2);
+                                 border-left-color:var(--accent-contribution);
+                                 background:rgba(14,165,233,0.04);
+                                 border-color:rgba(14,165,233,0.2);
                                  overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;
                                  -webkit-box-orient:vertical">
       {{ breakthroughs }}
@@ -828,9 +974,9 @@
         {% endfor %}
       {% else %}
         <div class="callout" style="font-size:19px;line-height:1.7;
-                                     border-left-color:var(--green);
-                                     background:rgba(5,150,105,0.04);
-                                     border-color:rgba(5,150,105,0.2);
+                                     border-left-color:var(--accent-contribution);
+                                     background:rgba(14,165,233,0.04);
+                                     border-color:rgba(14,165,233,0.2);
                                      overflow:hidden;display:-webkit-box;-webkit-line-clamp:9;
                                      -webkit-box-orient:vertical">
           {{ breakthroughs }}
@@ -871,7 +1017,21 @@
   <div class="section-title" style="color:var(--purple)">Design<br>Validation</div>
 
   <div style="flex:1;display:flex;flex-direction:column;gap:16px;min-height:0;overflow:hidden">
-    {% if ablation_highlights and "no ablation" not in ablation_highlights|lower %}
+    {% if ablation_chips_html %}
+      <!-- Component dependency chips: validated components in the contribution
+           accent, unvalidated ones visibly greyed-out/dashed rather than omitted. -->
+      <div style="flex-shrink:0">{{ ablation_chips_html | safe }}</div>
+      {% if ablation_highlights and "no ablation" not in ablation_highlights|lower %}
+      <div class="callout" style="font-size:17px;line-height:1.65;flex:1;overflow:hidden;
+                                   border-left-color:var(--purple);
+                                   background:rgba(124,58,237,0.04);
+                                   border-color:rgba(124,58,237,0.2);
+                                   display:-webkit-box;-webkit-line-clamp:8;
+                                   -webkit-box-orient:vertical">
+        {{ ablation_highlights }}
+      </div>
+      {% endif %}
+    {% elif ablation_highlights and "no ablation" not in ablation_highlights|lower %}
       <div class="callout" style="font-size:19px;line-height:1.72;flex:1;overflow:hidden;
                                    border-left-color:var(--purple);
                                    background:rgba(124,58,237,0.04);

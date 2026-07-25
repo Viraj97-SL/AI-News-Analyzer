@@ -78,6 +78,22 @@ class PipelineState(TypedDict):
     full_text_available: NotRequired[bool]       # False when PDF fetch/parse failed — abstract-only mode
     analysis_confidence: NotRequired[str]        # "high" | "low" — low means abstract-only analysis
 
+    # ── Relevance gate (relevance_gate_node) ─────────────────
+    relevance_score: NotRequired[float]          # 0-10 composite relevance score
+    relevance_passed: NotRequired[bool]          # False routes to the digest path instead of the full carousel
+    relevance_reasoning: NotRequired[str]        # one-sentence justification
+
+    # ── Digest path (digest.py) — used when relevance_passed is False ──
+    digest_html: NotRequired[str]
+
+    # ── Carousel visual upgrades ──────────────────────────────
+    architecture_spec_svg: NotRequired[str]           # generated diagram (diagram_spec.py) — guaranteed fallback
+    experiment_spec: NotRequired[dict]                # {"dataset":..., "baselines":..., "metrics":..., "compute":...}
+    claims_evidence: NotRequired[list[dict]]          # [{"claim":..., "evidence_status":...}]
+    ablation_components: NotRequired[list[dict]]      # [{"name":..., "validated": bool}]
+    ablation_chips_html: NotRequired[str]
+    hook_stat: NotRequired[dict]                      # {"value":..., "label":...} — hero-number slide
+
     # ── Research Analyst Enhancements ───────────────────────
     research_scores: NotRequired[dict]                     # F8: novelty/clarity/benchmarks/reproducibility 1-10
     hook_score: NotRequired[dict]                          # F1: hook quality scores

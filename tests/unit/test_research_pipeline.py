@@ -21,6 +21,7 @@ from app.agents.research_graph import (
     ResearchScores,
     RichDeepAnalysis,
     _build_research_article_html,
+    _render_bar_strip_svg,
     _render_gauge_svg,
     deep_analysis_node,
     score_research_node,
@@ -560,7 +561,10 @@ class TestResearchCarouselNode:
         assert "<svg" not in htmls["cover"]
 
     def test_graceful_fallback_with_sparse_analysis(self, tmp_path):
-        """Carousel must render all 10 slides even when new fields are absent (old analysis)."""
+        """Carousel must render without crashing when new fields are absent (old analysis).
+
+        An old 4-field analysis has no `ablation_highlights`, so the Ablation slide is
+        correctly dropped (variable slide count) — 9 slides, not 10."""
         mock_fitz = MagicMock()
         mock_fitz.open.return_value.convert_to_pdf.return_value = b"PDF"
 
@@ -584,7 +588,7 @@ class TestResearchCarouselNode:
              patch("app.agents.nodes.research_carousel.OUTPUT_DIR", tmp_path):
             result = research_carousel_node(state)
 
-        assert mock_h2i.return_value.screenshot.call_count == 10
+        assert mock_h2i.return_value.screenshot.call_count == 9
 
 
 # ── 5. send_approval_email with research_article_html ────────────────────────
@@ -891,6 +895,47 @@ class TestRenderGaugeSvg:
         result_1 = _render_gauge_svg("Min", 1, "#fff")
         # Higher value → larger fill dasharray first number
         assert result_10 != result_1
+
+
+# ── 9b. _render_bar_strip_svg (horizontal bar-strip replacement for gauges) ──
+
+class TestRenderBarStripSvg:
+    def test_returns_svg_string(self):
+        result = _render_bar_strip_svg("Novelty", 8, "#00f3ff")
+        assert "<svg" in result
+        assert "</svg>" in result
+
+    def test_includes_label_and_value(self):
+        result = _render_bar_strip_svg("Novelty", 8, "#00f3ff")
+        assert "NOVELTY" in result
+        assert ">8<" in result
+
+    def test_uses_specified_color(self):
+        result = _render_bar_strip_svg("Repro", 5, "#ff2d78")
+        assert "#ff2d78" in result
+
+    def test_value_10_fills_bar_fully(self):
+        result_10 = _render_bar_strip_svg("Max", 10, "#fff")
+        result_1 = _render_bar_strip_svg("Min", 1, "#fff")
+        # Higher value → wider fill-rect width
+        assert result_10 != result_1
+
+    def test_bar_strip_contains_all_four_metric_labels_and_values(self):
+        """A full deck row (4 metrics) must expose every label and every value —
+        this is the concrete replacement for the 4 radial gauge rings."""
+        gauge_defs = [
+            ("Novelty", 8, "#0EA5E9"),
+            ("Clarity", 7, "#0EA5E9"),
+            ("Benchmarks", 9, "#0EA5E9"),
+            ("Repro", 5, "#0EA5E9"),
+        ]
+        strip_html = "".join(_render_bar_strip_svg(l, v, c) for l, v, c in gauge_defs)
+
+        for label, value, _ in gauge_defs:
+            assert label.upper() in strip_html
+            assert f">{value}<" in strip_html
+        # One compact <svg> segment per metric, not 4 tall radial rings.
+        assert strip_html.count("<svg") == 4
 
 
 # ── 10. send_newsletter coverage ─────────────────────────────────────────────

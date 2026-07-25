@@ -21,9 +21,74 @@ from pathlib import Path
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.services.image_service import ImageService
 
 logger = get_logger(__name__)
 settings = get_settings()
+
+
+def _build_slide_thumbnail_grid(
+    slide_image_paths: list[str],
+    approve_url: str,
+    reject_url: str,
+) -> str:
+    """
+    Build the fast-review thumbnail grid + prominent approve/reject block.
+
+    Design decision (per approval-model audit): the existing DB/API layer
+    (``ApprovalStatus`` on ``LinkedInPostModel``, and the ``/approvals/{run_id}``
+    + ``/approvals/via-token`` routes) only models a *run-level* approval
+    decision — there is no per-slide approval row or endpoint. Rather than
+    inventing a parallel per-slide data model, each thumbnail here links only
+    to its own full-resolution image (opens in a new tab) so the reviewer can
+    zoom in on a specific slide. The actual approve/reject *decision* is a
+    single run-level action, surfaced here as one prominent button pair at
+    the top of the email so a reviewer can scan the thumbnails and decide in
+    ~20 seconds, instead of scrolling through a full article dump.
+    """
+    if not slide_image_paths:
+        return ""
+
+    image_service = ImageService(settings.app_base_url)
+    slide_urls = image_service.get_all_card_urls(slide_image_paths)
+    if not slide_urls:
+        return ""
+
+    thumbnails = "".join(
+        f"""
+        <a href="{url}" target="_blank" rel="noopener"
+           style="display:inline-block;margin:6px;text-decoration:none">
+            <img src="{url}" alt="Slide {i}" width="140"
+                 style="width:140px;height:140px;object-fit:cover;border-radius:8px;
+                        border:1px solid #e0e0e0;display:block" />
+        </a>"""
+        for i, url in enumerate(slide_urls, start=1)
+    )
+
+    return f"""
+    <div style="text-align:center;margin-bottom:24px;padding:20px 12px;
+                background:#eef6ff;border-radius:10px;border:2px solid #0a66c2">
+        <p style="margin:0 0 14px;font-size:14px;color:#333">
+            {len(slide_urls)} carousel slides generated — scan below, then decide:
+        </p>
+        <a href="{approve_url}"
+           style="background:#0a66c2;color:white;padding:16px 40px;border-radius:8px;
+                  text-decoration:none;font-size:16px;font-weight:700;margin-right:12px;
+                  display:inline-block">
+            Approve &amp; Publish
+        </a>
+        <a href="{reject_url}"
+           style="background:#dc3545;color:white;padding:16px 40px;border-radius:8px;
+                  text-decoration:none;font-size:16px;font-weight:700;display:inline-block">
+            Reject &amp; Revise
+        </a>
+    </div>
+
+    <h3 style="margin-bottom:8px">Slide Preview</h3>
+    <div style="text-align:center;margin-bottom:12px">
+        {thumbnails}
+    </div>
+    """
 
 
 class EmailService:
@@ -81,8 +146,25 @@ class EmailService:
             reject_url: str,
             image_paths: list[str] | None = None,
             research_article_html: str = "",
+            slide_image_paths: list[str] | None = None,
     ) -> None:
+        """
+        Send the human-review email for a pipeline run awaiting approval.
+
+        ``slide_image_paths`` is optional and additive: when omitted (the
+        news pipeline's call site never sets it), the email renders exactly
+        as before — a LinkedIn preview, optional article dump, and a single
+        approve/reject button pair. When present (research pipeline runs
+        that generated carousel slides), a fast-review thumbnail grid plus a
+        prominent top-of-email approve/reject block is prepended. See
+        ``_build_slide_thumbnail_grid`` for why this stays run-level rather
+        than per-slide.
+        """
         recipients = settings.email_recipients[:1]
+
+        slide_grid_section = _build_slide_thumbnail_grid(
+            slide_image_paths or [], approve_url, reject_url
+        )
 
         article_section = (
             f"""
@@ -105,6 +187,8 @@ class EmailService:
                     max-width: 700px; margin: 0 auto;">
             <h2>AI Pipeline - Review Required</h2>
             <p>Run <code>{run_id[:8]}</code> has generated content ready for publishing.</p>
+
+            {slide_grid_section}
 
             <h3>LinkedIn Post Preview:</h3>
             <div style="background: #f5f5f5; padding: 16px; border-radius: 8px;

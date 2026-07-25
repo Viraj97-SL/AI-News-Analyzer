@@ -22,11 +22,17 @@ Both pipelines feature Human-in-the-Loop (HITL) email approvals, dynamic cyberpu
 - **Dual-Brain Architecture:** Completely isolated state machines for News (`graph.py`) and Research (`research_graph.py`) to prevent cross-contamination of prompts and context.
 - **Agentic Paper Ranking & Selection:** Uses Gemini 2.5 Flash to score every scraped ArXiv candidate on novelty, impact, technical depth, benchmark quality, and reproducibility, then selects the single most groundbreaking paper of the week (with a priority boost for manually curated papers).
 - **Full-Paper Grounded Analysis:** Downloads and parses the source PDF (PyMuPDF) to extract the Results, Ablation, and Experiment Setup sections beyond the abstract — cached to disk so figure extraction and text extraction never re-download the same PDF. Falls back to abstract-only mode with an explicit low-confidence flag when the PDF can't be fetched or parsed.
-- **Deep Thematic Analysis:** Uses Gemini 2.5 Pro to act as a Principal Investigator, extracting a 16-field breakdown — Core Problem, Methodology, Technical Innovation, Experiment Setup, Quantitative Results, Ablation Highlights, Real-World Applications, and a calibrated Significance Verdict — of dense academic papers.
-- **Render-Safe Text Pipeline:** Every LLM-produced string is normalized (LaTeX math and `\text{}`/super-subscript markup stripped and mapped to Unicode) and fit to each slide's character budget via LLM rewrite-on-overflow — with a sentence-boundary fallback, never a mid-word "..." — before it ever reaches a template.
-- **Figure Quality Gate:** Figures extracted from the ArXiv HTML/PDF are screened for luminance and color-dominance before use; unreadable figures (near-black plots, blank pages) are auto-corrected (contrast/inversion) or rejected in favor of the LLM-generated ASCII fallback.
-- **Dynamic Cyberpunk Visuals:** Uses a headless Chromium browser (`html2image`) with Jinja2 and CSS to generate data-rich graphical cards — radial score gauges, benchmark bar charts, prior-art comparison cards, and a variable-length (10–11 slide) LinkedIn carousel — for both standard news and deep research layouts.
-- **Human-in-the-Loop (HITL):** Pauses graph execution via LangGraph's `interrupt()` to send an admin email via Resend with secure, HMAC-signed JWT tokens for one-click **Approve** or **Reject** publishing.
+- **Deep Thematic Analysis:** Uses Gemini 2.5 Pro to act as a Principal Investigator, extracting a 16-field breakdown — Core Problem, Methodology, Technical Innovation, Experiment Setup, Quantitative Results, Ablation Highlights, Real-World Applications, and a Significance Verdict — of dense academic papers.
+- **Relevance Gate:** Every candidate is scored on practitioner actionability, audience fit, claim verifiability, novelty, and a hype penalty before a carousel is ever generated; papers below the configurable threshold skip straight to a lightweight one-paragraph digest instead of a full deep-dive, and every score is logged for threshold tuning.
+- **Deterministic Verdict Calibration:** The cover slide's significance verdict (`Paradigm Shift` / `Major Contribution` / `Solid Contribution` / `Incremental`) is a pure function of the benchmark, reproducibility, and novelty scores — never freely assigned by the LLM — so a "Major Contribution" label can no longer appear next to a low reproducibility score.
+- **Render-Safe Text Pipeline:** Every LLM-produced string is normalized (LaTeX math and `\text{}`/super-subscript markup stripped and mapped to Unicode) and fit to each slide's character budget via LLM rewrite-on-overflow — with a sentence-boundary fallback, never a mid-word "..." — before it ever reaches a template. Structured LLM extractions (relevance, verdict inputs, ablation, claims, experiment spec, hook stat, diagram spec, prior art) retry on schema-validation failure before falling back.
+- **Figure Quality Gate:** Figures extracted from the ArXiv HTML/PDF are screened for luminance and color-dominance before use; unreadable figures (near-black plots, blank pages) are auto-corrected (contrast/inversion) or rejected in favor of a generated architecture diagram.
+- **Visual, Not Prose-Heavy Slides:** Experiment Setup renders as a Dataset/Baselines/Metrics/Compute spec-card grid (missing fields amber-flagged `NOT REPORTED`); Results renders a claims-vs-evidence table (✓ quantified / ⚠ qualitative / ✗ absent) instead of a hedging paragraph; Ablation renders component chips with unvalidated components visibly greyed-out rather than omitted; every paper gets a real architecture diagram — an extracted figure when available, otherwise a structured LLM-emitted node/edge spec rendered server-side to SVG.
+- **Reader-Shaped Narrative & Semantic Colour:** A dedicated "hook" slide surfaces the single most surprising number before any prose. Colour is assigned by role, not by slide-type — one accent for this paper's own contribution, grey for prior-art/comparison content, amber for unverified or missing claims — consistently across the deck.
+- **Variable-Length Carousel:** Slide count is not hardcoded (9–12 slides): the Hook, Figures, and Ablation slides only appear when there's real structured content behind them, so a thin paper produces a shorter deck instead of padded-out slides.
+- **Dynamic Cyberpunk Visuals:** Uses a headless Chromium browser (`html2image`) with Jinja2 and CSS to generate data-rich graphical cards — horizontal bar-strip score visuals, benchmark bar charts, prior-art comparison cards, and the variable-length LinkedIn carousel — for both standard news and deep research layouts.
+- **Human-in-the-Loop (HITL):** Pauses graph execution via LangGraph's `interrupt()` to send an admin email via Resend with secure, HMAC-signed JWT tokens for one-click **Approve** or **Reject** publishing. Research-pipeline approval emails include a thumbnail grid of every generated slide for a fast visual scan before approving; the news pipeline's email is unchanged.
+- **Weekly Digest Fallback:** Papers that clear ingestion but fail the relevance gate aren't discarded — each gets a lightweight one-paragraph digest entry, batched and sent as a single combined email once enough have accumulated (configurable batch size) instead of one email per skipped paper.
 - **Future-Proofed for PaperBanana:** Built-in hooks to integrate cutting-edge agentic flowchart generation (PaperBanana) with automatic fallbacks to HTML-rendered visuals.
 
 ---
@@ -56,8 +62,11 @@ Both pipelines feature Human-in-the-Loop (HITL) email approvals, dynamic cyberpu
          │  ├─ Hash Deduplicator               │  ├─ Gemini 2.5 Pro
          │  └─ Gemini Summarizer               │  └─ Extracts Methodology
          │                                     │
+         │                                     ├─ Relevance Gate
+         │                                     │  └─ Score → carousel or digest
+         │                                     │
          ├─ Media Generation                   ├─ Media Generation
-         │  ├─ LinkedIn Hook Gen               │  ├─ Cyberpunk Grid Card
+         │  ├─ LinkedIn Hook Gen               │  ├─ Bar-Strip Score Card
          │  └─ html2image News Card            │  └─ (PaperBanana Hook)
          │                                     │
          └─ HITL Approval Node                 └─ HITL Approval Node
@@ -87,13 +96,27 @@ Both pipelines feature Human-in-the-Loop (HITL) email approvals, dynamic cyberpu
 2. **Rank & Select:** Scores every candidate on novelty/impact/technical depth/benchmark quality/reproducibility and isolates *one* primary paper.
 3. **Fetch Full Text:** Downloads the source PDF and extracts the Results, Ablation, and Experiment Setup sections beyond the abstract (cached to disk; degrades to abstract-only + low-confidence flag if unavailable).
 4. **Deep Analysis:** Gemini 2.5 Pro produces a 16-field technical breakdown grounded in the full paper where available.
-5. **Scoring & Media Gen:** Renders score gauges, a benchmark bar chart, a prior-art comparison card, and quality-filtered figures (or an LLM-generated architecture diagram fallback).
-6. **Carousel Assembly:** Every text field is LaTeX-normalized and fit to its slide's character budget before a 10–11 slide LinkedIn carousel PDF is rendered.
-7. **Approval:** Halts state and awaits human email approval to publish the deep dive.
+5. **Relevance Gate:** Scores practitioner actionability, audience fit, claim verifiability, novelty, and a hype penalty. Below threshold → the paper is routed to the weekly digest instead of a full carousel.
+6. **Structured Extraction:** Hook stat, experiment spec, claims-vs-evidence, ablation components, and an architecture diagram spec are each extracted as validated (retry-on-failure) structured output, feeding the visual slides directly instead of prose.
+7. **Scoring & Media Gen:** Renders bar-strip score visuals, a benchmark bar chart, a prior-art comparison card, and quality-filtered figures (or the generated architecture diagram as fallback).
+8. **Carousel Assembly:** Every text field is LaTeX-normalized and fit to its slide's character budget before a variable-length (9–12 slide) LinkedIn carousel PDF is rendered in reader-shaped order (hook → problem → prior art → method → proof → cost → CTA), with a deterministically calibrated significance verdict.
+9. **Approval:** Halts state and awaits human email approval — the email includes a thumbnail grid of every slide — to publish the deep dive.
 
 ---
 
 ## 🆕 Recent Improvements
+
+**2026-07-25 — Relevance gate, visual slides, narrative restructure, review UX**
+- Added a `PaperRelevance` scoring gate (practitioner actionability, audience fit, claim verifiability, novelty, hype penalty) before carousel generation; papers below the configurable threshold route to a lightweight digest instead, batched into a single email once enough have accumulated.
+- Made the significance verdict a deterministic function of benchmark/reproducibility/novelty scores instead of an LLM-assigned label, so the verdict can't contradict the underlying gauge scores.
+- Replaced prose-only Experiment Setup, Results, and Ablation slides with structured visuals: a spec-card grid (amber `NOT REPORTED` tiles), a claims-vs-evidence table (✓/⚠/✗), and component chips (greyed-out when unvalidated).
+- Every paper now gets a real architecture diagram: an extracted figure when available, otherwise a structured node/edge spec emitted by the LLM and rendered server-side to SVG — no more ASCII-only fallback.
+- Added a dedicated "hook" slide (the single most surprising number, alone, large) ahead of any prose, and moved colour from decorative per-slide-type hues to a consistent semantic system: one accent for this paper's own contribution, grey for prior art/comparison, amber for unverified claims.
+- Replaced the four radial score gauges with a horizontal bar-strip visual (same information, less vertical space, more legible at mobile width).
+- Slide count is no longer hardcoded: Hook, Figures, and Ablation slides are only included when there's real content behind them (9–12 slides depending on the paper).
+- Structured LLM extractions across all 7 new node types now retry on schema-validation failure before falling back to their default/empty result.
+- Added mobile-width (350px) font-size regression tests and golden-file/snapshot rendering tests (4 representative fixtures: figure-rich, abstract-only, LaTeX-in-title, math-heavy) diffed against approved baselines.
+- The research-pipeline approval email now includes a thumbnail grid of every generated slide for a ~20-second visual review instead of scrolling a full article dump; the news pipeline's email is untouched.
 
 **2026-07-23 — Research carousel correctness + full-text grounding**
 - Fixed LaTeX/math markup (`$...$`, `\text{}`, `^`/`_` sub-superscripts) leaking into rendered slide titles and body text; every LLM-produced string now passes through a normalization step before rendering.

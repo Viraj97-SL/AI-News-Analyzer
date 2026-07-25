@@ -140,11 +140,32 @@ class Settings(BaseSettings):
         default=2,
         description="Max LLM re-request attempts when a carousel field exceeds its char budget",
     )
+    llm_schema_max_retries: int = Field(
+        default=2,
+        description="Max LLM invocation attempts when `.with_structured_output()` fails schema "
+        "validation, before falling back to the node's default/empty result",
+    )
 
     # ── Research pipeline: full-text extraction ──────────────
     full_text_section_max_chars: int = Field(
         default=4000,
         description="Max characters extracted per target section (Results/Ablation/Setup) from the full PDF",
+    )
+
+    # ── Research pipeline: relevance gate ─────────────────────
+    relevance_score_threshold: float = Field(
+        default=5.5,
+        description="Papers scoring below this (0-10 scale) skip the full carousel and get a digest entry instead",
+    )
+    digest_batch_size: int = Field(
+        default=3,
+        description="Number of unpublished digest entries to accumulate before sending one combined digest email",
+    )
+
+    # ── Research carousel: prior-art table ────────────────────
+    prior_art_max_wins: int = Field(
+        default=2,
+        description="Max comparison-table rows allowed to show a 'WINS' badge — keeps one message per slide",
     )
 
     # ── Cost guardrails ─────────────────────────────────────

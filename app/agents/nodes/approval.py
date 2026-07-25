@@ -71,6 +71,11 @@ def human_approval_node(state: PipelineState) -> Command[Literal["publish", "rev
         if carousel_pdf and _Path(carousel_pdf).exists():
             attachments.append(carousel_pdf)
 
+        # Gate the fast-review thumbnail-grid email on the research-pipeline-only
+        # state key (`research_carousel_slide_paths`). The news pipeline never
+        # populates this key, so `research_slides` is `[]` for news runs and
+        # `send_approval_email` falls back to its original full-dump layout —
+        # this is what keeps the news pipeline's email untouched.
         EmailService().send_approval_email(
             run_id=run_id,
             linkedin_preview=state.get("linkedin_draft", ""),
@@ -78,6 +83,7 @@ def human_approval_node(state: PipelineState) -> Command[Literal["publish", "rev
             reject_url=reject_url,
             image_paths=attachments,
             research_article_html=state.get("newsletter_html", ""),
+            slide_image_paths=list(research_slides),
         )
         logger.info("approval_email_sent", run_id=run_id)
     except Exception as e:

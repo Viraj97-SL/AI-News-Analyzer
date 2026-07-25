@@ -10,18 +10,29 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
+from app.agents.nodes.ablation_spec import extract_ablation_spec_node
 from app.agents.nodes.approval import human_approval_node
 from app.agents.nodes.architecture_diagram import architecture_diagram_node
 from app.agents.nodes.benchmark_chart import benchmark_chart_node
+from app.agents.nodes.claims_evidence import extract_claims_evidence_node
+from app.agents.nodes.diagram_spec import generate_architecture_spec_node
+from app.agents.nodes.digest import (
+    _persist_and_maybe_publish_digest_node,
+    build_digest_entry_node,
+)
+from app.agents.nodes.experiment_spec import extract_experiment_spec_node
 from app.agents.nodes.full_text import fetch_full_text_node
+from app.agents.nodes.hook_stat import extract_hook_stat_node
 from app.agents.nodes.manual_papers import load_manual_papers_node
 from app.agents.nodes.paper_ranker import rank_papers_node
 from app.agents.nodes.prior_art import prior_art_node
+from app.agents.nodes.relevance import relevance_gate_node
 from app.agents.nodes.research_carousel import research_carousel_node
 from app.agents.nodes.scraper import scrape_arxiv_node
-from app.agents.nodes.svg_gauge import render_gauge_svg
+from app.agents.nodes.svg_gauge import ACCENT_CONTRIBUTION, render_bar_strip_svg, render_gauge_svg
 from app.agents.nodes.text_budget import enforce_char_budgets
 from app.agents.nodes.text_utils import normalize_model_strings, normalize_text, normalize_title
+from app.agents.nodes.verdict import calibrate_verdict
 from app.agents.state import PipelineState
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -153,7 +164,11 @@ class HookScore(BaseModel):
 # ── SVG Gauge Helper (Feature 8) ─────────────────────────────────────────────
 # Lives in nodes/svg_gauge.py so research_carousel.py can reuse it without a
 # circular import (research_graph imports research_carousel_node).
+# `_render_gauge_svg` is kept (unused in production paths) purely so existing
+# gauge-svg unit tests keep working; `_render_bar_strip_svg` is what
+# paperbanana_visual_node actually renders with now (see swap below).
 _render_gauge_svg = render_gauge_svg
+_render_bar_strip_svg = render_bar_strip_svg
 
 
 # ── 1. Intelligence Nodes ────────────────────────────────────────────────────
@@ -612,14 +627,29 @@ def score_research_node(state: PipelineState) -> dict:
             "limitations": analysis.get("limitations", ""),
         })
 
+        calibrated_verdict = calibrate_verdict(scores.model_dump())
+        updated_analysis = {**analysis, "significance_verdict": calibrated_verdict}
+        # Rebuild the email article so its verdict badge can never contradict the
+        # carousel's gauges — deep_analysis_node already built one with the LLM's
+        # freely-assigned verdict; this supersedes it with the calibrated one
+        # (LangGraph keeps the last writer for a plain-overwrite state key).
+        newsletter_html = _build_research_article_html(paper, RichDeepAnalysis(**updated_analysis))
+
         logger.info(
             "research_scored",
             novelty=scores.novelty,
             clarity=scores.methodology_clarity,
             benchmarks=scores.benchmark_improvement,
             repro=scores.reproducibility,
+            llm_verdict=analysis.get("significance_verdict"),
+            calibrated_verdict=calibrated_verdict,
         )
-        return {"research_scores": scores.model_dump(), "current_step": "research_scored"}
+        return {
+            "research_scores": scores.model_dump(),
+            "deep_analysis": updated_analysis,
+            "newsletter_html": newsletter_html,
+            "current_step": "research_scored",
+        }
 
     except Exception as e:
         logger.warning("research_scoring_failed", error=str(e))
@@ -761,15 +791,19 @@ def paperbanana_visual_node(state: PipelineState) -> dict:
             OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
             # ── Build gauge HTML (Feature 8) ──────────────────────
+            # All 4 scores are this paper's own quantified/verified standing, so
+            # they share the single "contribution" accent colour (role-driven,
+            # not one hue per metric) and render as a compact bar strip instead
+            # of 4 tall radial rings.
             gauges_html = ""
             if research_scores:
                 gauge_defs = [
-                    ("Novelty",       research_scores.get("novelty", 0),              "#0EA5E9"),
-                    ("Clarity",       research_scores.get("methodology_clarity", 0),  "#7C3AED"),
-                    ("Benchmarks",    research_scores.get("benchmark_improvement", 0),"#059669"),
-                    ("Repro",         research_scores.get("reproducibility", 0),       "#E11D48"),
+                    ("Novelty",       research_scores.get("novelty", 0),              ACCENT_CONTRIBUTION),
+                    ("Clarity",       research_scores.get("methodology_clarity", 0),  ACCENT_CONTRIBUTION),
+                    ("Benchmarks",    research_scores.get("benchmark_improvement", 0), ACCENT_CONTRIBUTION),
+                    ("Repro",         research_scores.get("reproducibility", 0),       ACCENT_CONTRIBUTION),
                 ]
-                gauge_svgs = [_render_gauge_svg(lbl, val, col) for lbl, val, col in gauge_defs]
+                gauge_svgs = [_render_bar_strip_svg(lbl, val, col) for lbl, val, col in gauge_defs]
                 gauges_html = "".join(gauge_svgs)
 
             # ── Base64-encode benchmark chart (Feature 5) ──────────
@@ -879,6 +913,10 @@ def _route_after_approval(state: PipelineState) -> Literal["publish", "revise"]:
     return "revise"
 
 
+def _route_after_relevance(state: PipelineState) -> Literal["deep_dive", "digest"]:
+    return "deep_dive" if state.get("relevance_passed", True) else "digest"
+
+
 # ── 3. Build the Graph ───────────────────────────────────────────────────────
 
 def build_research_graph(checkpointer=None) -> StateGraph:
@@ -895,12 +933,22 @@ def build_research_graph(checkpointer=None) -> StateGraph:
     # ── Intelligence pipeline ─────────────────────────────────────────────────
     workflow.add_node("fetch_full_text",      fetch_full_text_node)       # full-text PDF sections
     workflow.add_node("deep_analysis",        deep_analysis_node)
-    workflow.add_node("score_research",       score_research_node)       # F8: gauges
+    workflow.add_node("relevance_gate",       relevance_gate_node)        # gate before full deep-dive
+    workflow.add_node("score_research",       score_research_node)       # F8: gauges + calibrated verdict
     workflow.add_node("score_hook",           score_hook_node)            # F1: hook quality
     workflow.add_node("benchmark_chart",      benchmark_chart_node)       # F5: bar chart
     workflow.add_node("architecture_diagram", architecture_diagram_node)  # F6: figures
+    workflow.add_node("generate_architecture_spec", generate_architecture_spec_node)  # guaranteed diagram
+    workflow.add_node("extract_experiment_spec",    extract_experiment_spec_node)     # spec-card grid
+    workflow.add_node("extract_claims_evidence",    extract_claims_evidence_node)     # claims-vs-evidence
+    workflow.add_node("extract_ablation_spec",      extract_ablation_spec_node)       # dependency chips
+    workflow.add_node("extract_hook_stat",          extract_hook_stat_node)           # hero-number slide
     workflow.add_node("prior_art",            prior_art_node)             # F7: comparison card
     workflow.add_node("research_carousel",    research_carousel_node)     # F2: PDF carousel
+
+    # ── Digest path (relevance gate rejected) ─────────────────────────────────
+    workflow.add_node("digest_entry",   build_digest_entry_node)
+    workflow.add_node("publish_digest", _persist_and_maybe_publish_digest_node)
 
     # ── Visuals + HITL + Publish ──────────────────────────────────────────────
     workflow.add_node("paperbanana_visual", paperbanana_visual_node)
@@ -918,11 +966,24 @@ def build_research_graph(checkpointer=None) -> StateGraph:
     workflow.add_edge("rank_papers",        "select_paper")
     workflow.add_edge("select_paper",       "fetch_full_text")
     workflow.add_edge("fetch_full_text",    "deep_analysis")
-    workflow.add_edge("deep_analysis",      "score_research")
+    workflow.add_edge("deep_analysis",      "relevance_gate")
+
+    workflow.add_conditional_edges(
+        "relevance_gate", _route_after_relevance,
+        {"deep_dive": "score_research", "digest": "digest_entry"},
+    )
+    workflow.add_edge("digest_entry",   "publish_digest")
+    workflow.add_edge("publish_digest", END)
+
     workflow.add_edge("score_research",     "score_hook")
     workflow.add_edge("score_hook",         "benchmark_chart")
     workflow.add_edge("benchmark_chart",    "architecture_diagram")
-    workflow.add_edge("architecture_diagram", "prior_art")
+    workflow.add_edge("architecture_diagram", "generate_architecture_spec")
+    workflow.add_edge("generate_architecture_spec", "extract_experiment_spec")
+    workflow.add_edge("extract_experiment_spec",    "extract_claims_evidence")
+    workflow.add_edge("extract_claims_evidence",    "extract_ablation_spec")
+    workflow.add_edge("extract_ablation_spec",      "extract_hook_stat")
+    workflow.add_edge("extract_hook_stat",          "prior_art")
     workflow.add_edge("prior_art",          "research_carousel")
     workflow.add_edge("research_carousel",  "paperbanana_visual")
     workflow.add_edge("paperbanana_visual", "human_approval")

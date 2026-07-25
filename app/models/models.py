@@ -1,7 +1,7 @@
 """
 SQLAlchemy 2.0 ORM models.
 
-Five core entities: AgentRun, NewsArticle, Summary, LinkedInPost, EmailDelivery.
+Six core entities: AgentRun, NewsArticle, Summary, LinkedInPost, EmailDelivery, DigestEntry.
 Uses mapped_column (SQLAlchemy 2.0 style) for type safety.
 """
 
@@ -11,6 +11,7 @@ import enum
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Enum,
     Float,
@@ -112,6 +113,29 @@ class LinkedInPostModel(Base):
     )
     published_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DigestEntryModel(Base):
+    """
+    One low-relevance paper's one-paragraph write-up (see app/agents/nodes/digest.py).
+
+    Entries accumulate here across separate pipeline runs until
+    ``settings.digest_batch_size`` unpublished rows exist, at which point they
+    are combined into a single "N papers this week" email and marked published.
+    """
+
+    __tablename__ = "digest_entries"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id"))
+    title: Mapped[str] = mapped_column(String(500))
+    url: Mapped[str] = mapped_column(String(2000))
+    html_snippet: Mapped[str] = mapped_column(Text)
+    relevance_score: Mapped[float] = mapped_column(Float, default=0.0)
+    published: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
 
 
 class EmailDeliveryModel(Base):
