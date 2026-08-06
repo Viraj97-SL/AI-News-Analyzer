@@ -112,8 +112,10 @@ def _persist_and_maybe_publish_digest_node(state: "PipelineState") -> dict:
     simply left `published=False` and picked up by whichever run pushes the
     count over the threshold next.
     """
+    from datetime import UTC, datetime
+
     from app.agents.nodes.db_persist import _get_sync_session
-    from app.models.models import DigestEntryModel
+    from app.models.models import AgentRun, DigestEntryModel, RunStatus
 
     run_id = state.get("run_id", "")
     digest_html = state.get("digest_html", "")
@@ -128,6 +130,22 @@ def _persist_and_maybe_publish_digest_node(state: "PipelineState") -> dict:
 
     try:
         with _get_sync_session() as session:
+            # digest_entries.run_id is FK'd to agent_runs — the digest path never
+            # runs persist_to_db_node (that only fires on the news pipeline), so
+            # the parent row has to be created here or the insert below violates
+            # the foreign key constraint.
+            if session.get(AgentRun, run_id) is None:
+                session.add(
+                    AgentRun(
+                        id=run_id,
+                        status=RunStatus.COMPLETED,
+                        trigger_type=state.get("trigger_type", "scheduled"),
+                        started_at=datetime.now(UTC),
+                        completed_at=datetime.now(UTC),
+                    )
+                )
+                session.flush()
+
             if session.get(DigestEntryModel, entry_id) is None:
                 session.add(
                     DigestEntryModel(

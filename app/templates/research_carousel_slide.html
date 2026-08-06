@@ -651,6 +651,33 @@
           </tbody>
         </table>
       </div>
+      {% if win_counts and (win_counts.new + win_counts.prior + win_counts.tie) > 0 %}
+      {% set total_dims = win_counts.new + win_counts.prior + win_counts.tie %}
+      <div style="flex-shrink:0">
+        <div style="display:flex;height:14px;border-radius:4px;overflow:hidden;
+                    border:1px solid var(--border)">
+          {% if win_counts.new > 0 %}
+          <div style="width:{{ (win_counts.new / total_dims * 100)|round|int }}%;
+                      background:var(--accent-contribution)"></div>
+          {% endif %}
+          {% if win_counts.tie > 0 %}
+          <div style="width:{{ (win_counts.tie / total_dims * 100)|round|int }}%;
+                      background:var(--accent-unverified-amber)"></div>
+          {% endif %}
+          {% if win_counts.prior > 0 %}
+          <div style="width:{{ (win_counts.prior / total_dims * 100)|round|int }}%;
+                      background:var(--accent-prior-art-grey)"></div>
+          {% endif %}
+        </div>
+        <div style="display:flex;gap:18px;margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:11px">
+          <span style="color:var(--accent-contribution)">● This Paper {{ win_counts.new }}/{{ total_dims }}</span>
+          {% if win_counts.tie > 0 %}
+          <span style="color:var(--accent-unverified-amber)">● Tie {{ win_counts.tie }}/{{ total_dims }}</span>
+          {% endif %}
+          <span style="color:var(--accent-prior-art-grey)">● Prior SOTA {{ win_counts.prior }}/{{ total_dims }}</span>
+        </div>
+      </div>
+      {% endif %}
       {% if prior_art.overall_verdict %}
       <div class="callout" style="font-size:16px;border-left-color:var(--accent-prior-art-grey);flex-shrink:0;
                                    background:rgba(100,116,139,0.04);border-color:rgba(100,116,139,0.2)">
@@ -1108,6 +1135,12 @@
                                  -webkit-box-orient:vertical">
       {{ expert_interpretation }}
     </div>
+    {% elif impact_fallback %}
+    <div class="callout" style="font-size:18px;line-height:1.7;flex:1;
+                                 overflow:hidden;display:-webkit-box;-webkit-line-clamp:9;
+                                 -webkit-box-orient:vertical">
+      {{ impact_fallback }}
+    </div>
     {% endif %}
   </div>
 
@@ -1139,6 +1172,11 @@
       <div class="body-text" style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:5;
            -webkit-box-orient:vertical">
         {{ expert_interpretation }}
+      </div>
+    {% elif takeaways_fallback %}
+      <div class="body-text" style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:5;
+           -webkit-box-orient:vertical">
+        {{ takeaways_fallback }}
       </div>
     {% endif %}
 

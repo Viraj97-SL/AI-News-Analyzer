@@ -49,6 +49,18 @@ TEMPLATE_DIR = Path(__file__).parent.parent.parent / "templates"
 _TOTAL_SLIDES = 10  # base slide count, excluding the optional figures slide
 
 
+def _count_dimension_winners(dimensions: list[dict]) -> dict[str, int]:
+    """Tally winner counts across prior-art comparison dimensions, for the
+    win-distribution bar on the Prior Art slide — a genuine summary of the
+    already-extracted per-dimension verdicts, not a fabricated metric."""
+    counts = {"new": 0, "prior": 0, "tie": 0}
+    for dim in dimensions:
+        winner = dim.get("winner") if isinstance(dim, dict) else getattr(dim, "winner", None)
+        if winner in counts:
+            counts[winner] += 1
+    return counts
+
+
 def research_carousel_node(state: "PipelineState") -> dict:
     """Render 10-slide 1080×1080 PNG slides and combine into a PDF for LinkedIn."""
     analysis = state.get("deep_analysis", {})
@@ -163,6 +175,7 @@ def research_carousel_node(state: "PipelineState") -> dict:
                 "slide_type": "prior_art",
                 "prior_art": prior_art,
                 "technical_innovation": analysis.get("technical_innovation", ""),
+                "win_counts": _count_dimension_winners(prior_art.get("dimensions", [])),
             },
             # Methodology — injects extracted figure, generated diagram, or ASCII fallback
             {
@@ -221,6 +234,17 @@ def research_carousel_node(state: "PipelineState") -> dict:
                 "limitations_fallback": analysis.get("limitations", "")[:350],
             })
 
+        # Last-resort fallback text for slides whose preferred fields can come back
+        # empty from the LLM (real_world_applications / future_directions are
+        # optional lists) — core_problem and methodology are required fields on
+        # RichDeepAnalysis, so they're the most reliable non-empty text available.
+        summary_paragraphs = [p for p in analysis.get("executive_summary", "").split("\n\n") if p.strip()]
+        fallback_text = (
+            (summary_paragraphs[-1] if summary_paragraphs else "")
+            or analysis.get("core_problem", "")
+            or analysis.get("methodology", "")
+        )[:450]
+
         slide_defs.extend([
             # Real-World Impact
             {
@@ -228,6 +252,7 @@ def research_carousel_node(state: "PipelineState") -> dict:
                 "real_world_applications": analysis.get("real_world_applications", []),
                 "ecosystem_impact": analysis.get("ecosystem_impact", ""),
                 "expert_interpretation": analysis.get("expert_interpretation", ""),
+                "impact_fallback": fallback_text,
             },
             # Takeaways + CTA
             {
@@ -235,6 +260,7 @@ def research_carousel_node(state: "PipelineState") -> dict:
                 "future_directions": analysis.get("future_directions", []),
                 "limitations": analysis.get("limitations", ""),
                 "expert_interpretation": analysis.get("expert_interpretation", ""),
+                "takeaways_fallback": fallback_text,
                 "paper_url": paper.get("url", ""),
             },
         ])
