@@ -168,6 +168,18 @@ class Settings(BaseSettings):
         description="Max comparison-table rows allowed to show a 'WINS' badge — keeps one message per slide",
     )
 
+    # ── Research pipeline: model preferences (D22) ────────────
+    # Probed once per run in order; first model that answers is used. Gemini 2.5 is
+    # retired for new keys; gemini-4-argon / 3.1-pro need a paid (billing-enabled) key.
+    research_deep_models: list[str] = Field(
+        default=["gemini-4-argon", "gemini-3.1-pro-preview", "gemini-3.5-flash"],
+        description="Deep analysis / prior-art models, best first",
+    )
+    research_fast_models: list[str] = Field(
+        default=["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
+        description="Ranking / extraction / short-text models, best first",
+    )
+
     # ── Research pipeline v2: optional AI cover art (D9) ──────
     research_cover_image_enabled: bool = Field(
         default=True,  # D21: user opted in (2026-11-01)
@@ -175,7 +187,7 @@ class Settings(BaseSettings):
         "(~$0.04/run)",
     )
     research_cover_image_model: str = Field(
-        default="gemini-2.5-flash-image",
+        default="gemini-3.1-flash-image",
         description="Gemini image model used for the research carousel cover illustration",
     )
 

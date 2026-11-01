@@ -40,6 +40,7 @@ from app.agents.nodes.text_utils import normalize_model_strings, normalize_text,
 from app.agents.nodes.verdict import calibrate_verdict
 from app.agents.state import PipelineState
 from app.core.config import get_settings
+from app.core.models import research_model
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -226,7 +227,7 @@ def select_paper_node(state: PipelineState) -> dict:
     ])
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model=research_model("fast"),
         temperature=0.2,
         api_key=settings.google_api_key,
     ).with_structured_output(PaperSelection)
@@ -515,7 +516,7 @@ def deep_analysis_node(state: PipelineState) -> dict:
 
     # ── 1. Rich structured analysis (Gemini 2.5 Pro) ──────────────────────
     analysis_llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-pro",
+        model=research_model("deep"),
         temperature=0.3,
         api_key=settings.google_api_key,
     ).with_structured_output(RichDeepAnalysis)
@@ -551,7 +552,7 @@ def deep_analysis_node(state: PipelineState) -> dict:
 
     # ── 2. LinkedIn draft via LLM (Gemini 2.5 Flash) ─────────────────────
     flash_llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model=research_model("fast"),
         temperature=0.7,
         api_key=settings.google_api_key,
     )
@@ -638,7 +639,7 @@ def score_research_node(state: PipelineState) -> dict:
 
     try:
         llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model=research_model("fast"),
             temperature=0.1,
             api_key=settings.google_api_key,
         ).with_structured_output(ResearchScores)
@@ -700,7 +701,7 @@ def score_hook_node(state: PipelineState) -> dict:
         return {"hook_score": {}, "current_step": "hook_skipped"}
 
     flash = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model=research_model("fast"),
         temperature=0.2,
         api_key=settings.google_api_key,
     )

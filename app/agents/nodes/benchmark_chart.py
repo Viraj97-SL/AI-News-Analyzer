@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 from app.agents.nodes.text_utils import normalize_text
 from app.core.config import get_settings
+from app.core.models import research_model
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -51,7 +52,7 @@ def benchmark_chart_node(state: "PipelineState") -> dict:
     # ── 1. Extract metrics ────────────────────────────────────────────────
     try:
         llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model=research_model("fast"),
             temperature=0.0,
             api_key=settings.google_api_key,
         ).with_structured_output(BenchmarkExtraction)

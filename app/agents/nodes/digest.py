@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 from app.agents.nodes.text_utils import normalize_text
 from app.core.config import get_settings
+from app.core.models import research_model
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -39,7 +40,7 @@ def build_digest_entry_node(state: "PipelineState") -> dict:
 
     try:
         llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model=research_model("fast"),
             temperature=0.3,
             api_key=settings.google_api_key,
         )

@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 from app.agents.nodes.llm_retry import invoke_with_schema_retry
 from app.agents.nodes.text_utils import normalize_model_strings
 from app.core.config import get_settings
+from app.core.models import research_model
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -40,7 +41,7 @@ def extract_hook_stat_node(state: "PipelineState") -> dict:
 
     try:
         llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model=research_model("fast"),
             temperature=0.2,
             api_key=settings.google_api_key,
         ).with_structured_output(HookStat)

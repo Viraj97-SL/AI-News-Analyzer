@@ -31,6 +31,10 @@ if TYPE_CHECKING:
 # Approximate Gemini list prices (standard tier, <=200k context) — estimates for the
 # cost guard and drift report, not billing. Update when Google changes pricing.
 MODEL_PRICES_PER_MTOK: dict[str, tuple[float, float]] = {
+    "gemini-3.1-pro": (2.00, 12.00),
+    "gemini-3.5-flash": (1.50, 9.00),
+    "gemini-3.1-flash-lite": (0.25, 1.50),
+    "gemini-3-flash": (0.50, 3.00),
     "gemini-2.5-pro": (1.25, 10.00),
     "gemini-2.5-flash-lite": (0.10, 0.40),
     "gemini-2.5-flash": (0.30, 2.50),
@@ -38,7 +42,7 @@ MODEL_PRICES_PER_MTOK: dict[str, tuple[float, float]] = {
 }
 # Unknown models are billed at the most expensive known rate so the cost guard
 # errs on the side of stopping early rather than overspending.
-_DEFAULT_PRICE: tuple[float, float] = (1.25, 10.00)
+_DEFAULT_PRICE: tuple[float, float] = (4.00, 18.00)
 _TOKENS_PER_MTOK = 1_000_000
 
 

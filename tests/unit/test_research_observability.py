@@ -89,6 +89,7 @@ def _run_main(monkeypatch, tmp_path, graph):
 
     monkeypatch.setattr(rg, "build_research_graph", lambda checkpointer=None: graph)
     monkeypatch.setattr(rt, "configure_langsmith", lambda s: False)
+    monkeypatch.setattr(rt, "resolve_research_models", lambda: {"deep": "d", "fast": "f"})
     monkeypatch.setattr(rt, "DEFAULT_METRICS_PATH", tmp_path / "m.jsonl")
     monkeypatch.setattr(
         rt,
@@ -126,3 +127,14 @@ def test_main_cost_limit_returns_1(monkeypatch, tmp_path):
     from app.core.tracing import CostLimitExceededError
 
     assert _run_main(monkeypatch, tmp_path, _FakeGraph(error=CostLimitExceededError("over"))) == 1
+
+
+def test_event_loop_factory_uses_selector_on_windows(monkeypatch):
+    import asyncio
+
+    import cron.research_trigger as rt
+
+    monkeypatch.setattr(rt.sys, "platform", "win32")
+    assert rt._event_loop_factory() is asyncio.SelectorEventLoop
+    monkeypatch.setattr(rt.sys, "platform", "linux")
+    assert rt._event_loop_factory() is None

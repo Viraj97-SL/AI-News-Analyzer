@@ -40,6 +40,7 @@ from app.agents.nodes.lab_registry import LAB_TIER_BONUS
 from app.agents.nodes.research_sources import attention_bonus, merge_research_candidates
 from app.agents.nodes.trends import trend_bonus
 from app.core.config import get_settings
+from app.core.models import research_model
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -103,7 +104,7 @@ def select_for_llm_ranking(candidates: list[dict]) -> list[dict]:
 
 def _build_ranking_chain():
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model=research_model("fast"),
         temperature=0.1,
         api_key=settings.google_api_key,
     )

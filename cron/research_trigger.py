@@ -6,6 +6,7 @@ from typing import Any
 
 from app.core.config import get_settings
 from app.core.logging import get_logger, setup_logging
+from app.core.models import resolve_research_models
 from app.core.run_metrics import DEFAULT_METRICS_PATH, append_run_metrics, extract_research_metrics
 from app.core.tracing import (
     CostLimitExceededError,
@@ -81,6 +82,9 @@ async def main() -> int:
     try:
         from app.agents.research_graph import build_research_graph
 
+        models = resolve_research_models()
+        logger.info("research_models", **models)
+
         initial_state = build_initial_state(run_id)
 
         if settings.is_sqlite:
@@ -114,6 +118,12 @@ async def main() -> int:
         return 1
 
 
+def _event_loop_factory():  # type: ignore[no-untyped-def]
+    """Async psycopg (LangGraph's Postgres checkpointer) cannot run on Windows'
+    default ProactorEventLoop, so use the selector loop there."""
+    return asyncio.SelectorEventLoop if sys.platform == "win32" else None
+
+
 if __name__ == "__main__":
-    exit_code = asyncio.run(main())
+    exit_code = asyncio.run(main(), loop_factory=_event_loop_factory())
     sys.exit(exit_code)
