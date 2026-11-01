@@ -63,9 +63,12 @@ class Settings(BaseSettings):
     google_api_key: str = ""
 
     # Model routing
-    model_classifier: str = "gemini-2.5-flash"
-    model_summarizer: str = "gemini-2.5-flash"
-    model_analyzer: str = "gemini-2.5-pro"
+    # Gemini 2.5 is retired for new API keys (404). Current-generation defaults that
+    # work on free-tier keys; override via MODEL_* env vars (e.g. a 3.1 Pro / 4.x model
+    # once billing is enabled).
+    model_classifier: str = "gemini-3.5-flash-lite"
+    model_summarizer: str = "gemini-3.5-flash"
+    model_analyzer: str = "gemini-3.5-flash"
 
     # ── Data Collection ─────────────────────────────────────
     tavily_api_key: str = ""

@@ -75,3 +75,11 @@ def test_research_nodes_have_no_hardcoded_gemini_names():
         if p.name not in news_only and re.search(r'model="gemini-', p.read_text(encoding="utf-8"))
     ]
     assert offenders == []
+
+
+def test_news_model_defaults_are_not_retired_gemini_2_5():
+    """Gemini 2.5 returns 404 for new keys — defaults must point at a live generation."""
+    from app.core.config import Settings
+
+    for field in ("model_classifier", "model_summarizer", "model_analyzer"):
+        assert not Settings.model_fields[field].default.startswith("gemini-2")
