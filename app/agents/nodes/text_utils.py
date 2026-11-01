@@ -86,3 +86,20 @@ def normalize_model_strings(model: BaseModel) -> BaseModel:
         for key, value in data.items()
     }
     return model.__class__(**normalized)
+
+
+_BLANK_LINE_MARKER = re.compile(r"[ \t]*\[\s*blank\s+line\s*\][ \t]*", re.IGNORECASE)
+_SECTION_HEADER_LINE = re.compile(r"^\s*─{2,}.*─{2,}\s*$")
+
+
+def strip_prompt_markers(text: str) -> str:
+    """Remove prompt-template scaffolding an LLM sometimes copies into its output.
+
+    The LinkedIn prompt marks structure with literal "[blank line]" placeholders and
+    "─── SECTION ───" headers; both must never reach the published post or the slides.
+    """
+    if not text:
+        return text
+    text = _BLANK_LINE_MARKER.sub("\n\n", text)
+    lines = [line for line in text.splitlines() if not _SECTION_HEADER_LINE.match(line)]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()

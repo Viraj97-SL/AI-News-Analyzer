@@ -36,7 +36,12 @@ from app.agents.nodes.research_sources import (
 from app.agents.nodes.svg_gauge import ACCENT_CONTRIBUTION, render_bar_strip_svg, render_gauge_svg
 from app.agents.nodes.text_budget import enforce_char_budgets
 from app.agents.nodes.trends import trend_hashtags, trend_labels
-from app.agents.nodes.text_utils import normalize_model_strings, normalize_text, normalize_title
+from app.agents.nodes.text_utils import (
+    normalize_model_strings,
+    normalize_text,
+    normalize_title,
+    strip_prompt_markers,
+)
 from app.agents.nodes.verdict import calibrate_verdict
 from app.agents.state import PipelineState
 from app.core.config import get_settings
@@ -606,7 +611,7 @@ def deep_analysis_node(state: PipelineState) -> dict:
             f"#AIResearch #MachineLearning #DeepLearning"
         )
 
-    linkedin_draft = normalize_text(linkedin_draft)
+    linkedin_draft = strip_prompt_markers(normalize_text(linkedin_draft))
 
     # ── 3. Full research article HTML for email newsletter ────────────────
     newsletter_html = _build_research_article_html(paper, analysis)
@@ -752,6 +757,7 @@ def score_hook_node(state: PipelineState) -> dict:
                 "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in _hook_resp).strip()
                 if isinstance(_hook_resp, list) else _hook_resp.strip()
             )
+            new_hook = strip_prompt_markers(new_hook)
 
             # Splice the new hook back in: replace content up to first double-newline
             rest_start = linkedin_draft.find("\n\n")
