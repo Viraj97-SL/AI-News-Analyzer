@@ -15,6 +15,7 @@ from app.agents.nodes.approval import human_approval_node
 from app.agents.nodes.architecture_diagram import architecture_diagram_node
 from app.agents.nodes.benchmark_chart import benchmark_chart_node
 from app.agents.nodes.claims_evidence import extract_claims_evidence_node
+from app.agents.nodes.cover_image import cover_image_node
 from app.agents.nodes.diagram_spec import generate_architecture_spec_node
 from app.agents.nodes.digest import (
     _persist_and_maybe_publish_digest_node,
@@ -28,9 +29,13 @@ from app.agents.nodes.paper_ranker import rank_papers_node
 from app.agents.nodes.prior_art import prior_art_node
 from app.agents.nodes.relevance import relevance_gate_node
 from app.agents.nodes.research_carousel import research_carousel_node
-from app.agents.nodes.scraper import scrape_arxiv_node
+from app.agents.nodes.research_sources import (
+    scrape_hf_daily_papers_node,
+    scrape_research_arxiv_node,
+)
 from app.agents.nodes.svg_gauge import ACCENT_CONTRIBUTION, render_bar_strip_svg, render_gauge_svg
 from app.agents.nodes.text_budget import enforce_char_budgets
+from app.agents.nodes.trends import trend_hashtags, trend_labels
 from app.agents.nodes.text_utils import normalize_model_strings, normalize_text, normalize_title
 from app.agents.nodes.verdict import calibrate_verdict
 from app.agents.state import PipelineState
@@ -133,6 +138,11 @@ class RichDeepAnalysis(BaseModel):
         ),
         default_factory=list,
     )
+    why_now: str = Field(default="", description=(
+        "2 sentences connecting this paper to the current AI landscape (e.g. MCP/tool use, RAG, "
+        "multi-agent systems, reasoning models, agent evals) when the TREND CONTEXT lists any. "
+        "Say concretely what it changes for teams building with those. Empty string if unrelated."
+    ))
     significance_verdict: str = Field(description=(
         "Exactly one of: 'Incremental', 'Solid Contribution', 'Major Contribution', 'Paradigm Shift'. "
         "Calibration: Transformers paper = Paradigm Shift, BERT = Major Contribution, "
@@ -184,7 +194,8 @@ def select_paper_node(state: PipelineState) -> dict:
     Fallback: original LLM-picks-from-abstracts approach when rankings are empty.
     """
     logger.info("research_node_running", step="selecting_best_paper")
-    articles = state.get("raw_articles", [])
+    # research_candidates = deduped/enriched (lab, trend_tags, upvotes) list from rank_papers_node
+    articles = state.get("research_candidates") or state.get("raw_articles", [])
     rankings = state.get("paper_rankings", [])
 
     if not articles:
@@ -289,6 +300,8 @@ Example: "Would you trade 5% accuracy for 10× inference speed in production?"
 🔗 Full paper in the first comment 👇
 
 HARD RULES:
+- If a RESEARCH LAB is given, name it in the hook or context ("Google DeepMind researchers ...").
+- If TREND CONTEXT is given, tie PRACTITIONER IMPACT to it and prefer the SUGGESTED HASHTAGS.
 - Total: 1,800–2,400 characters
 - NO URLs in body
 - NO filler: "game-changer", "revolutionary", "groundbreaking", "fascinating"
@@ -308,6 +321,22 @@ ADDITIONAL RULES FOR CLASSIC/LANDMARK PAPERS:
 - Highlight why it still matters or what it enabled downstream
 - Frame it as "revisiting a landmark": "5 years later, here's what [Paper] actually got right"\
 """
+
+
+def paper_context_block(paper: dict) -> str:
+    """Lab attribution + trend context passed to the analysis and LinkedIn prompts."""
+    lab = paper.get("lab")
+    tags = paper.get("trend_tags") or []
+    lines = [
+        f"RESEARCH LAB: {lab} (attribute findings to '{lab} researchers')" if lab
+        else "RESEARCH LAB: unknown (say 'the authors')",
+    ]
+    if tags:
+        lines.append(f"TREND CONTEXT: {', '.join(trend_labels(tags))}")
+        lines.append(f"SUGGESTED HASHTAGS: {' '.join(trend_hashtags(tags))}")
+    else:
+        lines.append("TREND CONTEXT: none")
+    return "\n".join(lines)
 
 
 def _build_research_article_html(paper: dict, analysis: "RichDeepAnalysis") -> str:  # type: ignore[name-defined]
@@ -502,12 +531,13 @@ def deep_analysis_node(state: PipelineState) -> dict:
          "Be specific, calibrated, and honest. Avoid marketing speak or generic praise. "
          "If the content is only an abstract, extract what you can and clearly note where "
          "full-paper details are needed." + low_confidence_note),
-        ("user", "Title: {title}\n\nPaper Content:\n{content}"),
+        ("user", "Title: {title}\n\n{paper_context}\n\nPaper Content:\n{content}"),
     ])
 
     try:
         analysis: RichDeepAnalysis = (analysis_prompt | analysis_llm).invoke({
             "title": paper["title"],
+            "paper_context": paper_context_block(paper),
             "content": content,
         })
     except Exception as e:
@@ -538,7 +568,9 @@ def deep_analysis_node(state: PipelineState) -> dict:
          "Quantitative results:\n{results}\n\n"
          "Practitioner impact: {expert_interpretation}\n\n"
          "Limitations: {limitations}\n\n"
-         "Significance verdict: {verdict}"),
+         "Significance verdict: {verdict}\n\n"
+         "{paper_context}\n\n"
+         "Why now: {why_now}"),
     ])
 
     contributions_text = "\n".join(f"• {c}" for c in analysis.key_contributions)
@@ -554,6 +586,8 @@ def deep_analysis_node(state: PipelineState) -> dict:
             "expert_interpretation": analysis.expert_interpretation,
             "limitations": analysis.limitations,
             "verdict": analysis.significance_verdict,
+            "paper_context": paper_context_block(paper),
+            "why_now": analysis.why_now or "n/a",
         })
         raw = linkedin_response.content
         linkedin_draft = (
@@ -759,91 +793,67 @@ def paperbanana_visual_node(state: PipelineState) -> dict:
         image_paths.append(comparison_card)
 
     try:
-        # 1. Try PaperBanana (premium path)
-        import paperbanana as pb  # type: ignore[import]
-        from pathlib import Path as _Path
+        from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-        output_dir = _Path("./output/images")
-        output_dir.mkdir(parents=True, exist_ok=True)
-        filename = str(output_dir / f"diagram_{run_id}.png")
+        from app.agents.nodes.screenshot_utils import capture_slide, make_hti
 
-        agent = pb.PaperBananaAgent(api_key=settings.google_api_key)
-        diagram_path = agent.generate_architecture_diagram(
-            title=paper.get("title", ""),
-            methodology_text=analysis.get("methodology", ""),
-            output_path=filename,
-            style="cyberpunk_dark",
+        TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
+        OUTPUT_DIR = Path("./output/images")
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+        # ── Build gauge HTML (Feature 8) ──────────────────────
+        # All 4 scores are this paper's own quantified/verified standing, so
+        # they share the single "contribution" accent colour (role-driven,
+        # not one hue per metric) and render as a compact bar strip instead
+        # of 4 tall radial rings.
+        gauges_html = ""
+        if research_scores:
+            gauge_defs = [
+                ("Novelty",       research_scores.get("novelty", 0),              ACCENT_CONTRIBUTION),
+                ("Clarity",       research_scores.get("methodology_clarity", 0),  ACCENT_CONTRIBUTION),
+                ("Benchmarks",    research_scores.get("benchmark_improvement", 0), ACCENT_CONTRIBUTION),
+                ("Repro",         research_scores.get("reproducibility", 0),       ACCENT_CONTRIBUTION),
+            ]
+            gauge_svgs = [_render_bar_strip_svg(lbl, val, col) for lbl, val, col in gauge_defs]
+            gauges_html = "".join(gauge_svgs)
+
+        # ── Base64-encode benchmark chart (Feature 5) ──────────
+        benchmark_chart_b64 = ""
+        if benchmark_chart_path and Path(benchmark_chart_path).exists():
+            benchmark_chart_b64 = base64.b64encode(
+                Path(benchmark_chart_path).read_bytes()
+            ).decode()
+
+        # ── Render enhanced card ────────────────────────────────
+        hti = make_hti(OUTPUT_DIR, (1200, 800))
+        env = Environment(
+            loader=FileSystemLoader(str(TEMPLATE_DIR)),
+            autoescape=select_autoescape(["html"]),
         )
-        image_paths.insert(0, diagram_path)
-        logger.info("paperbanana_success", path=diagram_path)
+        template = env.get_template("research_card.html")
+        html = template.render(
+            title=paper.get("title", "Deep Tech Research Update"),
+            core_problem=analysis.get("core_problem", ""),
+            methodology=analysis.get("methodology", ""),
+            run_id=run_id[:8],
+            gauges_html=gauges_html,
+            benchmark_chart_b64=benchmark_chart_b64,
+            architecture_diagram_b64=arch_b64,
+            architecture_fallback_text=arch_fallback,
+            arch_caption=arch_caption,
+            extra_figures=extra_figures,
+        )
 
-    except ImportError:
-        # 2. Fallback: html2image + enhanced Jinja2 template
-        logger.warning("paperbanana_sdk_missing", hint="Falling back to html2image cyberpunk card.")
+        filename = f"research_card_{run_id}.png"
+        path = capture_slide(
+            hti, html, filename, label="research_card_fallback", output_dir=OUTPUT_DIR
+        )
+        if path:
+            image_paths.insert(0, path)
+            logger.info("research_card_generated", path=filename)
 
-        try:
-            from jinja2 import Environment, FileSystemLoader, select_autoescape
-
-            from app.agents.nodes.screenshot_utils import capture_slide, make_hti
-
-            TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
-            OUTPUT_DIR = Path("./output/images")
-            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-            # ── Build gauge HTML (Feature 8) ──────────────────────
-            # All 4 scores are this paper's own quantified/verified standing, so
-            # they share the single "contribution" accent colour (role-driven,
-            # not one hue per metric) and render as a compact bar strip instead
-            # of 4 tall radial rings.
-            gauges_html = ""
-            if research_scores:
-                gauge_defs = [
-                    ("Novelty",       research_scores.get("novelty", 0),              ACCENT_CONTRIBUTION),
-                    ("Clarity",       research_scores.get("methodology_clarity", 0),  ACCENT_CONTRIBUTION),
-                    ("Benchmarks",    research_scores.get("benchmark_improvement", 0), ACCENT_CONTRIBUTION),
-                    ("Repro",         research_scores.get("reproducibility", 0),       ACCENT_CONTRIBUTION),
-                ]
-                gauge_svgs = [_render_bar_strip_svg(lbl, val, col) for lbl, val, col in gauge_defs]
-                gauges_html = "".join(gauge_svgs)
-
-            # ── Base64-encode benchmark chart (Feature 5) ──────────
-            benchmark_chart_b64 = ""
-            if benchmark_chart_path and Path(benchmark_chart_path).exists():
-                benchmark_chart_b64 = base64.b64encode(
-                    Path(benchmark_chart_path).read_bytes()
-                ).decode()
-
-            # ── Render enhanced card ────────────────────────────────
-            hti = make_hti(OUTPUT_DIR, (1200, 800))
-            env = Environment(
-                loader=FileSystemLoader(str(TEMPLATE_DIR)),
-                autoescape=select_autoescape(["html"]),
-            )
-            template = env.get_template("research_card.html")
-            html = template.render(
-                title=paper.get("title", "Deep Tech Research Update"),
-                core_problem=analysis.get("core_problem", ""),
-                methodology=analysis.get("methodology", ""),
-                run_id=run_id[:8],
-                gauges_html=gauges_html,
-                benchmark_chart_b64=benchmark_chart_b64,
-                architecture_diagram_b64=arch_b64,
-                architecture_fallback_text=arch_fallback,
-                arch_caption=arch_caption,
-                extra_figures=extra_figures,
-            )
-
-            filename = f"research_card_{run_id}.png"
-            path = capture_slide(hti, html, filename, label="research_card_fallback", output_dir=OUTPUT_DIR)
-            if path:
-                image_paths.insert(0, path)
-                logger.info("fallback_image_generated", path=filename)
-
-        except Exception as fallback_error:
-            logger.error("fallback_image_gen_failed", error=str(fallback_error))
-
-    except Exception as e:
-        logger.error("visual_generation_failed", error=str(e))
+    except Exception as fallback_error:
+        logger.error("research_card_render_failed", error=str(fallback_error))
 
     return {"image_paths": image_paths, "current_step": "visuals_generated"}
 
@@ -923,7 +933,8 @@ def build_research_graph(checkpointer=None) -> StateGraph:
     workflow = StateGraph(PipelineState)
 
     # ── Paper sourcing (fan-out; both feed raw_articles via Annotated reducer) ──
-    workflow.add_node("scrape_arxiv",       scrape_arxiv_node)
+    workflow.add_node("scrape_research_arxiv", scrape_research_arxiv_node)  # research-only (D1)
+    workflow.add_node("scrape_hf_daily",       scrape_hf_daily_papers_node)  # HF Daily Papers (D5)
     workflow.add_node("load_manual_papers", load_manual_papers_node)
 
     # ── Ranking + selection ───────────────────────────────────────────────────
@@ -944,6 +955,7 @@ def build_research_graph(checkpointer=None) -> StateGraph:
     workflow.add_node("extract_ablation_spec",      extract_ablation_spec_node)       # dependency chips
     workflow.add_node("extract_hook_stat",          extract_hook_stat_node)           # hero-number slide
     workflow.add_node("prior_art",            prior_art_node)             # F7: comparison card
+    workflow.add_node("cover_image",          cover_image_node)           # AI cover art (D9/D21)
     workflow.add_node("research_carousel",    research_carousel_node)     # F2: PDF carousel
 
     # ── Digest path (relevance gate rejected) ─────────────────────────────────
@@ -958,10 +970,12 @@ def build_research_graph(checkpointer=None) -> StateGraph:
 
     # ── Edges ─────────────────────────────────────────────────────────────────
     # Fan-out from START so scrapers run in parallel
-    workflow.add_edge(START, "scrape_arxiv")
+    workflow.add_edge(START, "scrape_research_arxiv")
+    workflow.add_edge(START, "scrape_hf_daily")
     workflow.add_edge(START, "load_manual_papers")
     # Both scrapers must finish before ranking (LangGraph waits automatically)
-    workflow.add_edge("scrape_arxiv",       "rank_papers")
+    workflow.add_edge("scrape_research_arxiv", "rank_papers")
+    workflow.add_edge("scrape_hf_daily",       "rank_papers")
     workflow.add_edge("load_manual_papers", "rank_papers")
     workflow.add_edge("rank_papers",        "select_paper")
     workflow.add_edge("select_paper",       "fetch_full_text")
@@ -984,7 +998,8 @@ def build_research_graph(checkpointer=None) -> StateGraph:
     workflow.add_edge("extract_claims_evidence",    "extract_ablation_spec")
     workflow.add_edge("extract_ablation_spec",      "extract_hook_stat")
     workflow.add_edge("extract_hook_stat",          "prior_art")
-    workflow.add_edge("prior_art",          "research_carousel")
+    workflow.add_edge("prior_art",          "cover_image")
+    workflow.add_edge("cover_image",        "research_carousel")
     workflow.add_edge("research_carousel",  "paperbanana_visual")
     workflow.add_edge("paperbanana_visual", "human_approval")
 

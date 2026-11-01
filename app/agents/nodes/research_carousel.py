@@ -37,7 +37,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.agents.state import PipelineState
 
+from app.agents.nodes.slide_quality import measure_fill_ratio
 from app.agents.nodes.svg_gauge import ACCENT_CONTRIBUTION, render_bar_strip_svg
+from app.agents.nodes.trends import trend_labels
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -47,6 +49,26 @@ TEMPLATE_DIR = Path(__file__).parent.parent.parent / "templates"
 
 
 _TOTAL_SLIDES = 10  # base slide count, excluding the optional figures slide
+
+# Decision D7: 4:5 portrait — LinkedIn's mobile-first document format.
+SLIDE_SIZE: tuple[int, int] = (1080, 1350)
+# Research-only Chrome flags (news renderer is unaffected):
+#  - 2× device scale factor → crisp text/figures when LinkedIn zooms the PDF
+#  - virtual time budget → web fonts + the template's auto-fit script settle before capture
+RENDER_FLAGS: list[str] = ["--force-device-scale-factor=2", "--virtual-time-budget=4000"]
+# Slides below this fill ratio are logged as blank-space regressions.
+MIN_FILL_RATIO = 0.6
+
+
+def _fill_ratios(paths: list[str]) -> dict[str, float]:
+    """path -> fill ratio; unreadable slides are logged and left out."""
+    ratios: dict[str, float] = {}
+    for path in paths:
+        try:
+            ratios[path] = measure_fill_ratio(path)
+        except (OSError, ValueError) as e:
+            logger.warning("slide_fill_ratio_failed", path=path, error=str(e))
+    return ratios
 
 
 def _count_dimension_winners(dimensions: list[dict]) -> dict[str, int]:
@@ -130,7 +152,7 @@ def research_carousel_node(state: "PipelineState") -> dict:
             autoescape=select_autoescape(["html"]),
         )
         template = env.get_template("research_carousel_slide.html")
-        hti = make_hti(OUTPUT_DIR, (1080, 1080))
+        hti = make_hti(OUTPUT_DIR, SLIDE_SIZE, extra_flags=RENDER_FLAGS)
 
         # Strip section-header lines (─── LABEL ───) produced by the LinkedIn prompt
         # before extracting the hook, so those labels never appear on the cover slide.
@@ -152,6 +174,9 @@ def research_carousel_node(state: "PipelineState") -> dict:
                 "paper_url": paper.get("url", ""),
                 "is_classic_paper": is_classic,
                 "score_gauges_html": score_gauges_html,
+                "lab": paper.get("lab") or "",
+                "cover_image_b64": state.get("cover_image_b64", "") or "",
+                "trend_labels": trend_labels(paper.get("trend_tags") or []),
             },
         ]
 
@@ -249,6 +274,7 @@ def research_carousel_node(state: "PipelineState") -> dict:
             # Real-World Impact
             {
                 "slide_type": "impact",
+                "why_now": analysis.get("why_now", ""),
                 "real_world_applications": analysis.get("real_world_applications", []),
                 "ecosystem_impact": analysis.get("ecosystem_impact", ""),
                 "expert_interpretation": analysis.get("expert_interpretation", ""),
@@ -269,6 +295,7 @@ def research_carousel_node(state: "PipelineState") -> dict:
         for i, slide_ctx in enumerate(slide_defs, start=1):
             slide_ctx["slide_num"] = i
             slide_ctx["total_slides"] = total_slides
+            slide_ctx["slide_height"] = SLIDE_SIZE[1]
 
         slide_pngs: list[str] = []
 
@@ -310,10 +337,27 @@ def research_carousel_node(state: "PipelineState") -> dict:
         doc.save(pdf_path)
         doc.close()
 
-        logger.info("research_carousel_generated", slides=len(existing), total=total_slides, pdf=pdf_path)
+        fill_by_path = _fill_ratios(existing)
+        fill_ratios = list(fill_by_path.values())
+        slide_prefix = f"research_carousel_{run_id}_"
+        sparse = [
+            Path(path).stem.removeprefix(slide_prefix)
+            for path, ratio in fill_by_path.items()
+            if ratio < MIN_FILL_RATIO
+        ]
+        if sparse:
+            logger.warning(
+                "research_carousel_sparse_slides", slides=sparse, min_fill_ratio=MIN_FILL_RATIO
+            )
+
+        logger.info(
+            "research_carousel_generated", slides=len(existing), total=total_slides, pdf=pdf_path,
+            fill_ratio_avg=round(sum(fill_ratios) / len(fill_ratios), 3) if fill_ratios else None,
+        )
         return {
             "research_carousel_pdf_path": pdf_path,
             "research_carousel_slide_paths": existing,
+            "slide_fill_ratios": fill_ratios,
             "current_step": "research_carousel_generated",
         }
 

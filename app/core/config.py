@@ -168,6 +168,17 @@ class Settings(BaseSettings):
         description="Max comparison-table rows allowed to show a 'WINS' badge — keeps one message per slide",
     )
 
+    # ── Research pipeline v2: optional AI cover art (D9) ──────
+    research_cover_image_enabled: bool = Field(
+        default=True,  # D21: user opted in (2026-11-01)
+        description="Generate a decorative cover illustration with a Gemini image model "
+        "(~$0.04/run)",
+    )
+    research_cover_image_model: str = Field(
+        default="gemini-2.5-flash-image",
+        description="Gemini image model used for the research carousel cover illustration",
+    )
+
     # ── Cost guardrails ─────────────────────────────────────
     max_cost_per_run: float = Field(
         default=5.0, description="Hard stop if estimated cost exceeds this ($)"

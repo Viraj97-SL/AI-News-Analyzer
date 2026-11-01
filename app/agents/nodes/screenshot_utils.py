@@ -26,14 +26,18 @@ CHROME_FLAGS = [
 ]
 
 
-def make_hti(output_dir: Path | str, size: tuple[int, int]):
-    """Construct an Html2Image instance with the shared container-safe flags."""
+def make_hti(output_dir: Path | str, size: tuple[int, int], extra_flags: list[str] | None = None):
+    """Construct an Html2Image instance with the shared container-safe flags.
+
+    `extra_flags` lets one renderer opt into additional Chrome flags without
+    changing behaviour for the others (the news pipeline passes none).
+    """
     from html2image import Html2Image
 
     return Html2Image(
         output_path=str(output_dir),
         size=size,
-        custom_flags=CHROME_FLAGS,
+        custom_flags=CHROME_FLAGS + list(extra_flags or []),
     )
 
 

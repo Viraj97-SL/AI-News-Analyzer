@@ -30,7 +30,7 @@
 
     body {
       width: 1080px;
-      height: 1080px;
+      height: {{ slide_height | default(1350) }}px;
       font-family: 'Inter', sans-serif;
       background: var(--bg);
       overflow: hidden;
@@ -66,8 +66,8 @@
       position: relative;
       z-index: 1;
       width: 1080px;
-      height: 1080px;
-      padding: 52px 64px 40px;
+      height: {{ slide_height | default(1350) }}px;
+      padding: 56px 64px 44px;
       display: flex;
       flex-direction: column;
     }
@@ -406,6 +406,50 @@
       margin-top: 10px;
     }
 
+    /* ── v2: lab badge, trend chips, why-now ───────────────── */
+    .lab-badge {
+      width: fit-content;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--text);
+      background: #FFFFFF;
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--blue);
+      border-radius: 6px;
+      padding: 8px 14px;
+    }
+    .trend-row { display: flex; flex-wrap: wrap; gap: 10px; }
+    .cover-art {
+      width: 100%;
+      height: 380px;
+      object-fit: cover;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      margin-bottom: 28px;
+      flex-shrink: 0;
+    }
+    .trend-chip {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--purple);
+      background: rgba(124,58,237,0.07);
+      border: 1px solid rgba(124,58,237,0.25);
+      border-radius: 999px;
+      padding: 7px 16px;
+    }
+    .why-now-label {
+      display: block;
+      margin-bottom: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--blue);
+    }
+
     /* ── Progress bar footer ─────────────────────────────── */
     .footer {
       margin-top: auto;
@@ -513,19 +557,36 @@
     ● PAPER BREAKDOWN
   </div>
 
+  {% if cover_image_b64 %}
+  <!-- Optional AI cover illustration (decorative only, D8) -->
+  <img class="cover-art" src="data:image/png;base64,{{ cover_image_b64 }}" alt="">
+  {% endif %}
+  <div style="flex:1;display:flex;flex-direction:column;gap:26px;min-height:0;overflow:hidden">
+  {% if lab %}
+  <!-- Research lab (superlab attribution) -->
+  <div class="lab-badge">FROM {{ lab | upper }}</div>
+  {% endif %}
+
   <!-- Title -->
   <h1 style="font-size:42px;font-weight:900;line-height:1.15;color:var(--text);
-             margin-bottom:28px;
              display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden">
     {{ title }}
   </h1>
 
   <!-- Hook -->
   <div class="callout" style="font-size:20px;font-weight:600;color:var(--blue);
-                               border-left-color:var(--blue);margin-bottom:28px;
+                               border-left-color:var(--blue);
                                display:-webkit-box;-webkit-line-clamp:3;
                                -webkit-box-orient:vertical;overflow:hidden">
     {{ hook }}
+  </div>
+
+  {% if trend_labels %}
+  <!-- Trend chips (MCP, RAG, multi-agent, ...) -->
+  <div class="trend-row">
+    {% for t in trend_labels[:3] %}<span class="trend-chip"># {{ t }}</span>{% endfor %}
+  </div>
+  {% endif %}
   </div>
 
   {% if score_gauges_html %}
@@ -553,7 +614,7 @@
     <div class="sys-label">ARXIV // THE HEADLINE NUMBER</div>
   </div>
 
-  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  <div data-no-fit style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
               text-align:center;gap:20px;min-height:0">
     <div style="font-family:'JetBrains Mono',monospace;font-size:220px;font-weight:800;
                 line-height:1;color:var(--accent-contribution);letter-spacing:-4px;
@@ -798,7 +859,8 @@
   <div class="section-eyebrow" style="color:var(--purple)">Straight from the source</div>
   <div class="section-title" style="color:var(--purple)">Figures From<br>The Paper</div>
 
-  <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:18px;min-height:0;overflow:hidden">
+  {# Portrait canvas: 2 figures stack full-width (landscape figures stay large); 3-4 use a 2x2 grid #}
+  <div style="flex:1;display:grid;grid-template-columns:{{ '1fr' if paper_figures|length <= 2 else '1fr 1fr' }};gap:18px;min-height:0;overflow:hidden">
     {% for fig in paper_figures[:4] %}
     <div style="display:flex;flex-direction:column;border-radius:10px;overflow:hidden;
                 border:1px solid var(--border);background:var(--card);min-height:0;
@@ -1107,6 +1169,12 @@
   <div class="section-title" style="color:var(--green);font-size:46px">Real-World<br>Applications</div>
 
   <div style="flex:1;display:flex;flex-direction:column;gap:16px;min-height:0;overflow:hidden">
+    {% if why_now %}
+    <div class="callout why-now" style="font-size:18px;line-height:1.6;border-left-color:var(--blue)">
+      <strong class="why-now-label">Why this matters now</strong>
+      {{ why_now }}
+    </div>
+    {% endif %}
     {% if real_world_applications %}
       <div class="impact-grid">
         {% for app in real_world_applications[:3] %}
@@ -1204,6 +1272,93 @@
 </div>
 
 {% endif %}
+
+{# ─── AUTO-FIT (research pipeline v2, D7/D10) ──────────────────────────────────
+   Removes the big blank areas: on text-centric slides the main flex:1 region is
+   wrapped, scaled up with CSS zoom (binary search, capped) until it fills the
+   free height, and centred vertically. Slides whose region holds a real
+   figure/chart (img or svg taller than 160px) are left alone — they already fill.
+   Runs synchronously (before the headless screenshot) and again once web fonts
+   finish loading, so a late font swap cannot leave text overflowing. #}
+<script>
+(function () {
+  var MAX_ZOOM = {{ fit_max_zoom | default(2.0) }};
+  var FILL_TARGET = 0.96;
+  var slide = document.querySelector('.slide');
+  if (!slide) return;
+  var region = null;
+  for (var i = 0; i < slide.children.length; i++) {
+    var c = slide.children[i];
+    if (c.classList.contains('footer')) continue;
+    if (parseFloat(getComputedStyle(c).flexGrow) >= 1) { region = c; break; }
+  }
+  if (!region || region.hasAttribute('data-no-fit')) return;
+  var media = region.querySelectorAll('img, svg');
+  for (var m = 0; m < media.length; m++) {
+    if (media[m].getBoundingClientRect().height > 160) return;
+  }
+  var cs = getComputedStyle(region);
+  var inner = document.createElement('div');
+  inner.className = 'fit-inner';
+  inner.style.display = cs.display.indexOf('flex') >= 0 ? 'flex' : 'block';
+  inner.style.flexDirection = cs.flexDirection;
+  inner.style.gap = cs.gap;
+  inner.style.alignItems = cs.alignItems === 'normal' ? 'stretch' : cs.alignItems;
+  while (region.firstChild) inner.appendChild(region.firstChild);
+  region.appendChild(inner);
+  region.style.display = 'flex';
+  region.style.flexDirection = 'column';
+  region.style.justifyContent = 'center';
+  region.style.overflow = 'hidden';
+  var regionWidth = region.clientWidth;
+
+  function apply(z) {
+    inner.style.zoom = z;
+    inner.style.width = (regionWidth / z) + 'px';
+  }
+  // Line-clamped blocks hide overflow, so height alone can't detect truncation:
+  // any clamped block that shows its full text at zoom 1 must still do so after zooming.
+  function clampedBlocks() {
+    var out = [], all = inner.querySelectorAll('*');
+    for (var n = 0; n < all.length; n++) {
+      var st = getComputedStyle(all[n]);
+      if (st.webkitLineClamp && st.webkitLineClamp !== 'none') out.push(all[n]);
+    }
+    return out;
+  }
+  // Chrome does not report clamped-away lines via scrollHeight, so count rendered
+  // lines instead: reaching the clamp limit means text may be cut off.
+  function truncated(el) {
+    var st = getComputedStyle(el);
+    var lh = parseFloat(st.lineHeight) || parseFloat(st.fontSize) * 1.2;
+    var lines = Math.round(el.clientHeight / lh);
+    return lines >= parseInt(st.webkitLineClamp, 10);
+  }
+  var guarded = [];
+  function fits(z) {
+    apply(z);
+    var r = inner.getBoundingClientRect();
+    if (r.height > region.clientHeight * FILL_TARGET) return false;
+    if (inner.scrollWidth > inner.clientWidth + 1) return false;
+    for (var g = 0; g < guarded.length; g++) { if (truncated(guarded[g])) return false; }
+    return true;
+  }
+  function fit() {
+    apply(1);
+    guarded = clampedBlocks().filter(function (el) { return !truncated(el); });
+    if (!fits(1)) { apply(1); document.body.setAttribute('data-fit-zoom', '1'); return; }
+    var lo = 1, hi = MAX_ZOOM;
+    for (var k = 0; k < 14; k++) {
+      var mid = (lo + hi) / 2;
+      if (fits(mid)) { lo = mid; } else { hi = mid; }
+    }
+    apply(lo);
+    document.body.setAttribute('data-fit-zoom', lo.toFixed(3));
+  }
+  fit();
+  if (document.fonts && document.fonts.ready) { document.fonts.ready.then(fit); }
+})();
+</script>
 
 </body>
 </html>
