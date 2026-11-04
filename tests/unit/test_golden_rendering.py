@@ -28,6 +28,7 @@ import pytest
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from PIL import Image, ImageChops
 
+from app.agents.nodes.research_carousel import SLIDE_SIZE
 from app.agents.nodes.screenshot_utils import CHROME_FLAGS, capture_slide
 from tests.golden.fixtures import GOLDEN_FIXTURES, GoldenFixture
 
@@ -71,8 +72,10 @@ def _render_fixture(fixture: GoldenFixture, output_dir: Path) -> Path:
     html = template.render(slide_type=fixture.slide_type, **fixture.context)
 
     filename = f"{fixture.name}.png"
-    hti = make_hti(output_dir, (1080, 1080))
-    hti.browser.flags = [*CHROME_FLAGS, *_EXTRA_CHROME_FLAGS]
+    # Production canvas size (portrait, D7). Rendered at 1x DPR to keep baselines small; the
+    # virtual-time budget lets the template's auto-fit script settle exactly as in production.
+    hti = make_hti(output_dir, SLIDE_SIZE)
+    hti.browser.flags = [*CHROME_FLAGS, *_EXTRA_CHROME_FLAGS, "--virtual-time-budget=4000"]
 
     max_attempts = 5
     rendered_path: Path | None = None

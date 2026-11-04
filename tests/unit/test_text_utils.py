@@ -103,3 +103,25 @@ class TestNormalizeModelStrings:
         model = _DummyModel(title="x", tags=[], score=1)
         result = normalize_model_strings(model)
         assert isinstance(result, _DummyModel)
+
+
+# ── strip_prompt_markers (LLM copied "[blank line]" into a real post, 2026-11-01) ──
+
+from app.agents.nodes.text_utils import strip_prompt_markers  # noqa: E402
+
+
+def test_strip_prompt_markers_removes_inline_blank_line_placeholder():
+    raw = "fine-tuning was entirely unnecessary. [blank line] Before this paper, NLP relied on..."
+    out = strip_prompt_markers(raw)
+    assert "[blank line]" not in out
+    assert out == "fine-tuning was entirely unnecessary.\n\nBefore this paper, NLP relied on..."
+
+
+def test_strip_prompt_markers_removes_marker_lines_and_section_headers():
+    raw = "─── HOOK ───\nBig claim.\n[Blank Line]\n\n\n─── CONTEXT ───\nWhy it matters."
+    assert strip_prompt_markers(raw) == "Big claim.\n\nWhy it matters."
+
+
+def test_strip_prompt_markers_leaves_normal_text_and_empty():
+    assert strip_prompt_markers("A normal post.\n\nSecond para.") == "A normal post.\n\nSecond para."
+    assert strip_prompt_markers("") == ""

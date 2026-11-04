@@ -71,6 +71,9 @@ class PipelineState(TypedDict):
     manual_paper_url: NotRequired[str]       # ArXiv URL/ID passed at trigger time (API or cron)
     is_classic_paper: NotRequired[bool]      # True when auto-rotated from famous-papers archive
     paper_rankings: NotRequired[list[dict]]  # scored+sorted list from rank_papers_node
+    research_candidates: NotRequired[list[dict]]  # deduped + enriched (lab, trend_tags, upvotes)
+    slide_fill_ratios: NotRequired[list[float]]   # per-slide content fill 0-1 (blank-space metric)
+    cover_image_b64: NotRequired[str]             # optional AI cover illustration (D9)
     paper_figures: NotRequired[list[dict]]   # [{b64: str, caption: str}] from architecture_diagram_node
 
     # ── Full-text extraction (fetch_full_text_node) ──────────

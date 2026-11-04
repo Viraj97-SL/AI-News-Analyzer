@@ -20,6 +20,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.core.config import get_settings
+from app.core.models import research_model
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -43,7 +44,7 @@ def _budget_for(field: str) -> int:
 
 def _regenerate_within_budget(field_name: str, current_text: str, budget: int, paper_title: str) -> str:
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model=research_model("fast"),
         temperature=0.2,
         api_key=settings.google_api_key,
     )

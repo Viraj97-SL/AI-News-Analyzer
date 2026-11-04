@@ -29,6 +29,7 @@ from app.agents.nodes.arxiv_utils import extract_arxiv_id
 from app.agents.nodes.figure_quality import assess_and_correct
 from app.agents.nodes.pdf_cache import fetch_pdf_bytes
 from app.core.config import get_settings
+from app.core.models import research_model
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -216,7 +217,7 @@ def _ascii_fallback(methodology: str) -> str:
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model=research_model("fast"),
         temperature=0.3,
         api_key=settings.google_api_key,
     )

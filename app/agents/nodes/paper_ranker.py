@@ -12,11 +12,18 @@ Ranking dimensions (all 1-10):
   benchmark_quality — strong, diverse, fair evaluations?
   reproducibility  — code / data / weights released?
 
-Composite formula:
-  0.30 × novelty + 0.25 × impact + 0.20 × technical_depth
-  + 0.15 × benchmark_quality + 0.10 × reproducibility
-  [+ 3.0 flat bonus for manual/curated papers]
-"""
+Composite formula (research pipeline v2):
+  quality = 0.30 x novelty + 0.25 x impact + 0.20 x technical_depth
+          + 0.15 x benchmark_quality + 0.10 x reproducibility
+  composite = quality
+            + lab_bonus        (superlab +1.5, tier-2 lab +0.5 — decision D4)
+            + attention_bonus  (HF upvotes / GitHub stars, log-scaled, max +2.0)
+            + trend_bonus      (+0.5 per hot trend, max +1.0 — decision D6)
+            [+ 3.0 for manual/curated papers, which also always sort first]
+
+Candidates from all research sources are first deduped/enriched
+(`merge_research_candidates`), then capped to MAX_LLM_RANKED by a cheap
+signal-only pre-score so LLM ranking cost stays bounded as sources grow.\n"""
 
 from __future__ import annotations
 
@@ -29,13 +36,27 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 
+from app.agents.nodes.lab_registry import LAB_TIER_BONUS
+from app.agents.nodes.research_sources import attention_bonus, merge_research_candidates
+from app.agents.nodes.trends import trend_bonus
 from app.core.config import get_settings
+from app.core.models import research_model
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 settings = get_settings()
 
 _BATCH_SIZE = 10  # papers per LLM call (keeps prompts within context limits)
+MAX_LLM_RANKED = 40  # cap on papers sent to the LLM ranker per run
+MANUAL_BONUS = 3.0
+_QUALITY_WEIGHTS = {
+    "novelty": 0.30,
+    "impact": 0.25,
+    "technical_depth": 0.20,
+    "benchmark_quality": 0.15,
+    "reproducibility": 0.10,
+}
+_NEUTRAL_SCORE = 5
 
 
 class _PaperScore(BaseModel):
@@ -60,85 +81,128 @@ class _BatchRanking(BaseModel):
     )
 
 
-def rank_papers_node(state: "PipelineState") -> dict:
-    """Score all raw_articles; return sorted paper_rankings."""
-    articles = state.get("raw_articles", [])
-    if not articles:
-        return {"paper_rankings": [], "current_step": "ranking_skipped"}
+def _lab_bonus_for(article: dict) -> float:
+    return LAB_TIER_BONUS.get(article.get("lab_tier") or 0, 0.0)
 
-    logger.info("ranking_papers", count=len(articles))
 
+def _signal_prescore(article: dict) -> float:
+    return (
+        _lab_bonus_for(article)
+        + attention_bonus(article)
+        + trend_bonus(article.get("trend_tags") or [])
+    )
+
+
+def select_for_llm_ranking(candidates: list[dict]) -> list[dict]:
+    """All manual papers + the highest signal pre-score papers, up to MAX_LLM_RANKED."""
+    manual = [a for a in candidates if a.get("source") == "manual"]
+    others = [a for a in candidates if a.get("source") != "manual"]
+    # sorted() is stable, so equal pre-scores keep source order (newest arXiv first)
+    ranked_others = sorted(others, key=_signal_prescore, reverse=True)
+    return (manual + ranked_others)[: max(MAX_LLM_RANKED, len(manual))]
+
+
+def _build_ranking_chain():
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model=research_model("fast"),
         temperature=0.1,
         api_key=settings.google_api_key,
     )
-    prompt = ChatPromptTemplate.from_messages([
-        (
-            "system",
-            "You are a senior AI researcher. Score each paper on 5 dimensions (1-10 each).\n"
-            "Calibration guide:\n"
-            "  10 = paradigm shift (Transformer/BERT/AlphaFold level)\n"
-            "   8 = strong novel contribution, likely cited widely\n"
-            "   6 = solid work with clear improvements\n"
-            "   4 = incremental, narrow, or heavily engineering-driven\n"
-            "   2 = derivative, low novelty, weak evaluation\n"
-            "Score ALL papers provided — omitting any paper is an error.",
-        ),
-        ("user", "{papers}"),
-    ])
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are a senior AI researcher. Score each paper on 5 dimensions (1-10 each).\n"
+                "Calibration guide:\n"
+                "  10 = paradigm shift (Transformer/BERT/AlphaFold level)\n"
+                "   8 = strong novel contribution, likely cited widely\n"
+                "   6 = solid work with clear improvements\n"
+                "   4 = incremental, narrow, or heavily engineering-driven\n"
+                "   2 = derivative, low novelty, weak evaluation\n"
+                "Score ALL papers provided — omitting any paper is an error.",
+            ),
+            ("user", "{papers}"),
+        ]
+    )
+    return prompt | llm.with_structured_output(_BatchRanking)
 
-    all_scores: list[dict] = []
 
-    for i in range(0, len(articles), _BATCH_SIZE):
-        batch = articles[i : i + _BATCH_SIZE]
+def _llm_quality_scores(candidates: list[dict]) -> dict[str, dict]:
+    """url -> raw LLM dimension scores; failed batches get neutral defaults."""
+    chain = _build_ranking_chain()
+    scores: dict[str, dict] = {}
+    for i in range(0, len(candidates), _BATCH_SIZE):
+        batch = candidates[i : i + _BATCH_SIZE]
         papers_text = "\n\n---\n\n".join(
-            f"URL: {a['url']}\nTitle: {a['title']}\nAbstract:\n{a['content'][:600]}"
-            for a in batch
+            f"URL: {a['url']}\nTitle: {a['title']}\nAbstract:\n{a['content'][:600]}" for a in batch
         )
         try:
-            result: _BatchRanking = (
-                prompt | llm.with_structured_output(_BatchRanking)
-            ).invoke({"papers": papers_text})
-            all_scores.extend(s.model_dump() for s in result.rankings)
+            result: _BatchRanking = chain.invoke({"papers": papers_text})
+            for s in result.rankings:
+                scores[s.paper_url] = s.model_dump()
             logger.info("ranking_batch_done", batch_start=i, scored=len(result.rankings))
         except Exception as e:
             logger.warning("ranking_batch_failed", batch_start=i, error=str(e))
-            # Neutral defaults so the batch still participates in sorting
-            for a in batch:
-                all_scores.append({
-                    "paper_url": a["url"],
-                    "novelty": 5, "impact": 5, "technical_depth": 5,
-                    "benchmark_quality": 5, "reproducibility": 5,
-                    "reason": "Ranking unavailable — defaults applied.",
-                })
+    return scores
 
-    # Identify manually curated papers for priority boost
-    manual_urls = {a["url"] for a in articles if a.get("source") == "manual"}
 
-    for s in all_scores:
-        composite = (
-            s.get("novelty", 5) * 0.30
-            + s.get("impact", 5) * 0.25
-            + s.get("technical_depth", 5) * 0.20
-            + s.get("benchmark_quality", 5) * 0.15
-            + s.get("reproducibility", 5) * 0.10
-        )
-        if s.get("paper_url") in manual_urls:
-            composite += 3.0  # ensures manual papers always win selection
-        s["composite_score"] = round(composite, 2)
-        s["is_manual"] = s.get("paper_url") in manual_urls
+def _score_entry(article: dict, llm_scores: dict | None) -> dict:
+    dims = {k: (llm_scores or {}).get(k, _NEUTRAL_SCORE) for k in _QUALITY_WEIGHTS}
+    quality = sum(dims[k] * w for k, w in _QUALITY_WEIGHTS.items())
+    is_manual = article.get("source") == "manual"
+    lab_b = _lab_bonus_for(article)
+    attn_b = attention_bonus(article)
+    trend_b = trend_bonus(article.get("trend_tags") or [])
+    composite = quality + lab_b + attn_b + trend_b + (MANUAL_BONUS if is_manual else 0.0)
+    return {
+        "paper_url": article["url"],
+        **dims,
+        "reason": (llm_scores or {}).get("reason", "Ranking unavailable — defaults applied."),
+        "quality_score": round(quality, 2),
+        "lab": article.get("lab"),
+        "lab_bonus": lab_b,
+        "attention_bonus": attn_b,
+        "trend_tags": list(article.get("trend_tags") or []),
+        "trend_bonus": trend_b,
+        "is_manual": is_manual,
+        "composite_score": round(composite, 2),
+    }
 
-    all_scores.sort(key=lambda x: x.get("composite_score", 0), reverse=True)
 
-    if all_scores:
-        top = all_scores[0]
+def rank_papers_node(state: PipelineState) -> dict:
+    """Merge candidates across sources, score them, return sorted paper_rankings."""
+    articles = state.get("raw_articles", [])
+    if not articles:
+        return {"paper_rankings": [], "research_candidates": [], "current_step": "ranking_skipped"}
+
+    candidates = merge_research_candidates(articles)
+    to_rank = select_for_llm_ranking(candidates)
+    logger.info(
+        "ranking_papers", raw=len(articles), unique=len(candidates), llm_ranked=len(to_rank)
+    )
+
+    llm_scores = _llm_quality_scores(to_rank)
+    rankings = sorted(
+        (_score_entry(a, llm_scores.get(a["url"])) for a in to_rank),
+        # Manual (user-curated) papers always win regardless of boosts; then composite.
+        key=lambda r: (r["is_manual"], r["composite_score"]),
+        reverse=True,
+    )
+
+    if rankings:
+        top = rankings[0]
         logger.info(
             "papers_ranked",
-            total=len(all_scores),
-            top_score=top.get("composite_score"),
-            top_url=top.get("paper_url", "")[:60],
-            is_manual=top.get("is_manual", False),
+            total=len(rankings),
+            top_score=top["composite_score"],
+            top_url=top["paper_url"][:60],
+            top_lab=top["lab"],
+            top_trends=top["trend_tags"],
+            is_manual=top["is_manual"],
         )
 
-    return {"paper_rankings": all_scores, "current_step": "papers_ranked"}
+    return {
+        "paper_rankings": rankings,
+        "research_candidates": candidates,
+        "current_step": "papers_ranked",
+    }
