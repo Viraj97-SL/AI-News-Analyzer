@@ -1,6 +1,7 @@
 import asyncio
 import sys
 import uuid
+from collections.abc import Coroutine
 from pathlib import Path
 from typing import Any
 
@@ -118,12 +119,19 @@ async def main() -> int:
         return 1
 
 
-def _event_loop_factory():  # type: ignore[no-untyped-def]
-    """Async psycopg (LangGraph's Postgres checkpointer) cannot run on Windows'
-    default ProactorEventLoop, so use the selector loop there."""
-    return asyncio.SelectorEventLoop if sys.platform == "win32" else None
+def _run(coro: Coroutine[Any, Any, int]) -> int:
+    """Run the cron coroutine on Python 3.10+.
+
+    Async psycopg (LangGraph's Postgres checkpointer) cannot run on Windows' default
+    ProactorEventLoop, so switch to the selector loop there. Uses the event-loop
+    policy rather than asyncio.run(loop_factory=...), which only exists on 3.12+
+    while production runs python:3.11-slim.
+    """
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    return asyncio.run(coro)
 
 
 if __name__ == "__main__":
-    exit_code = asyncio.run(main(), loop_factory=_event_loop_factory())
+    exit_code = _run(main())
     sys.exit(exit_code)

@@ -129,12 +129,48 @@ def test_main_cost_limit_returns_1(monkeypatch, tmp_path):
     assert _run_main(monkeypatch, tmp_path, _FakeGraph(error=CostLimitExceededError("over"))) == 1
 
 
-def test_event_loop_factory_uses_selector_on_windows(monkeypatch):
-    import asyncio
-
+def test_run_uses_plain_asyncio_run_on_linux(monkeypatch):
+    """Production runs Python 3.11 (python:3.11-slim): asyncio.run() must not get
+    3.12-only kwargs such as loop_factory, and no policy change is needed on Linux."""
     import cron.research_trigger as rt
 
-    monkeypatch.setattr(rt.sys, "platform", "win32")
-    assert rt._event_loop_factory() is asyncio.SelectorEventLoop
+    calls: list[tuple] = []
+
+    def fake_run(coro, **kwargs):
+        calls.append(kwargs)
+        coro.close()
+        return 7
+
+    policies: list = []
     monkeypatch.setattr(rt.sys, "platform", "linux")
-    assert rt._event_loop_factory() is None
+    monkeypatch.setattr(rt.asyncio, "run", fake_run)
+    monkeypatch.setattr(rt.asyncio, "set_event_loop_policy", policies.append)
+
+    async def _coro() -> int:
+        return 0
+
+    assert rt._run(_coro()) == 7
+    assert calls == [{}]
+    assert policies == []
+
+
+def test_run_uses_selector_policy_on_windows(monkeypatch):
+    import cron.research_trigger as rt
+
+    class FakeSelectorPolicy:
+        pass
+
+    policies: list = []
+    monkeypatch.setattr(rt.sys, "platform", "win32")
+    monkeypatch.setattr(
+        rt.asyncio, "WindowsSelectorEventLoopPolicy", FakeSelectorPolicy, raising=False
+    )
+    monkeypatch.setattr(rt.asyncio, "set_event_loop_policy", policies.append)
+    monkeypatch.setattr(rt.asyncio, "run", lambda coro: (coro.close(), 0)[1])
+
+    async def _coro() -> int:
+        return 0
+
+    assert rt._run(_coro()) == 0
+    assert len(policies) == 1
+    assert isinstance(policies[0], FakeSelectorPolicy)
