@@ -85,6 +85,7 @@ class PipelineState(TypedDict):
     relevance_score: NotRequired[float]          # 0-10 composite relevance score
     relevance_passed: NotRequired[bool]          # False routes to the digest path instead of the full carousel
     relevance_reasoning: NotRequired[str]        # one-sentence justification
+    relevance_is_ai_ml: NotRequired[bool]        # False = off-topic; never published or digested
 
     # ── Digest path (digest.py) — used when relevance_passed is False ──
     digest_html: NotRequired[str]

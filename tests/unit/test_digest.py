@@ -42,6 +42,23 @@ class TestBuildDigestEntryNode:
         assert "A short paragraph about the paper." in result["digest_html"]
         assert result["current_step"] == "digest_built"
 
+    def test_skips_off_topic_paper(self):
+        """A non-AI paper (e.g. pure math) must never enter the digest queue."""
+        with patch("app.agents.nodes.digest.ChatGoogleGenerativeAI") as MockLLM:
+            result = build_digest_entry_node({
+                "chosen_research_paper": {
+                    "title": "A Quasipolynomial Algorithm for ell_infty Contractions",
+                    "url": "https://arxiv.org/abs/2610.30122",
+                },
+                "deep_analysis": {"core_problem": "Fixed points.", "breakthroughs": "Faster."},
+                "relevance_score": 3.0,
+                "relevance_is_ai_ml": False,
+            })
+
+        assert result["digest_html"] == ""
+        assert result["current_step"] == "digest_skipped_off_topic"
+        MockLLM.assert_not_called()
+
     def test_falls_back_to_core_problem_on_llm_failure(self):
         with patch("app.agents.nodes.digest.ChatGoogleGenerativeAI") as MockLLM:
             MockLLM.side_effect = RuntimeError("API down")

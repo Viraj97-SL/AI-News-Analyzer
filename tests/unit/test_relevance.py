@@ -117,6 +117,40 @@ class TestRelevanceGateNode:
         for verdict in ("Solid Contribution", "Incremental", None):
             assert self._run_with_low_score(monkeypatch, verdict)["relevance_passed"] is False
 
+    def test_reports_ai_topic_flag(self, monkeypatch):
+        relevance = PaperRelevance(
+            practitioner_actionability=2, audience_fit=1, claim_verifiability=8, novelty=8,
+            hype_penalty=0, reasoning="Pure math.", is_ai_ml=False,
+        )
+        with patch("app.agents.nodes.relevance.ChatGoogleGenerativeAI") as MockLLM:
+            mock_instance = MagicMock()
+            mock_instance.with_structured_output.return_value = _mock_llm_instance(relevance)
+            MockLLM.return_value = mock_instance
+            result = relevance_gate_node(_base_state())
+
+        assert result["relevance_is_ai_ml"] is False
+
+    def test_off_topic_paper_never_passes_even_with_major_verdict(self, monkeypatch):
+        relevance = PaperRelevance(
+            practitioner_actionability=9, audience_fit=9, claim_verifiability=9, novelty=9,
+            hype_penalty=0, reasoning="Great, but not AI.", is_ai_ml=False,
+        )
+        analysis = {**_base_state()["deep_analysis"], "significance_verdict": "Major Contribution"}
+        with patch("app.agents.nodes.relevance.ChatGoogleGenerativeAI") as MockLLM:
+            mock_instance = MagicMock()
+            mock_instance.with_structured_output.return_value = _mock_llm_instance(relevance)
+            MockLLM.return_value = mock_instance
+            result = relevance_gate_node(_base_state(deep_analysis=analysis))
+
+        assert result["relevance_passed"] is False
+
+    def test_is_ai_ml_defaults_true(self):
+        r = PaperRelevance(
+            practitioner_actionability=5, audience_fit=5, claim_verifiability=5, novelty=5,
+            hype_penalty=0, reasoning="x",
+        )
+        assert r.is_ai_ml is True
+
     def test_retries_once_after_transient_failure_then_succeeds(self, monkeypatch):
         """A schema/validation failure on the first attempt should retry rather than
         immediately falling back to the fail-open default."""

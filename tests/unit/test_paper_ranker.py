@@ -141,3 +141,70 @@ def test_llm_batch_failure_falls_back_to_neutral_scores():
 def test_empty_articles():
     out = pr.rank_papers_node({"raw_articles": []})
     assert out["paper_rankings"] == []
+
+
+# ── AI-topic filter ────────────────────────────────────────────────────────
+# Regression: "A Quasipolynomial Algorithm for ell_infty Contractions" (pure math)
+# was picked as a run's paper and reached the 2026-11-06 digest email.
+_OFF_TOPIC_URLS = {"https://arxiv.org/abs/2610.30122"}
+
+
+def _topic_aware_llm():
+    def fake_invoke(inputs):
+        urls = [
+            line[5:].strip() for line in inputs["papers"].splitlines() if line.startswith("URL: ")
+        ]
+        return pr._BatchRanking(
+            rankings=[
+                pr._PaperScore(
+                    paper_url=u,
+                    novelty=9 if u in _OFF_TOPIC_URLS else 6,  # off-topic paper scores HIGHER
+                    impact=9 if u in _OFF_TOPIC_URLS else 6,
+                    technical_depth=9 if u in _OFF_TOPIC_URLS else 6,
+                    benchmark_quality=6,
+                    reproducibility=6,
+                    reason="r",
+                    is_ai_ml=u not in _OFF_TOPIC_URLS,
+                )
+                for u in urls
+            ]
+        )
+
+    chain = MagicMock()
+    chain.invoke.side_effect = fake_invoke
+    return chain
+
+
+def test_off_topic_paper_is_dropped_even_if_it_scores_highest():
+    arts = [_article("2610.30122", title="A Quasipolynomial Algorithm for ell_infty Contractions"),
+            _article("2610.00001")]
+    with patch.object(pr, "_build_ranking_chain", return_value=_topic_aware_llm()):
+        out = pr.rank_papers_node({"raw_articles": arts})
+
+    urls = [r["paper_url"] for r in out["paper_rankings"]]
+    assert urls == ["https://arxiv.org/abs/2610.00001"]
+
+
+def test_manual_paper_is_never_dropped_as_off_topic():
+    arts = [_article("2610.30122", source="manual"), _article("2610.00001")]
+    with patch.object(pr, "_build_ranking_chain", return_value=_topic_aware_llm()):
+        out = pr.rank_papers_node({"raw_articles": arts})
+
+    assert out["paper_rankings"][0]["paper_url"].endswith("2610.30122")
+
+
+def test_ranking_failure_keeps_papers_fail_open():
+    chain = MagicMock()
+    chain.invoke.side_effect = RuntimeError("quota")
+    with patch.object(pr, "_build_ranking_chain", return_value=chain):
+        out = pr.rank_papers_node({"raw_articles": [_article("2610.30122")]})
+
+    assert len(out["paper_rankings"]) == 1
+
+
+def test_is_ai_ml_defaults_true_when_model_omits_it():
+    score = pr._PaperScore(
+        paper_url="u", novelty=5, impact=5, technical_depth=5,
+        benchmark_quality=5, reproducibility=5, reason="r",
+    )
+    assert score.is_ai_ml is True
