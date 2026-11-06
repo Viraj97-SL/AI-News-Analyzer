@@ -154,6 +154,14 @@ class Settings(BaseSettings):
         default=4000,
         description="Max characters extracted per target section (Results/Ablation/Setup) from the full PDF",
     )
+    full_text_body_max_chars: int = Field(
+        default=30_000,
+        description="Max chars of the paper body (before References) sent to deep analysis",
+    )
+    full_text_min_body_chars: int = Field(
+        default=2_000,
+        description="Less extracted text than this = unreadable PDF (abstract-only mode)",
+    )
 
     # ── Research pipeline: relevance gate ─────────────────────
     relevance_score_threshold: float = Field(
