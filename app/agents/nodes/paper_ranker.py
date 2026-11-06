@@ -73,6 +73,14 @@ class _PaperScore(BaseModel):
         ge=1, le=10, description="Reproducibility 1-10: code/data/weights released?"
     )
     reason: str = Field(description="One sentence on what makes this paper notable or weak.")
+    is_ai_ml: bool = Field(
+        default=True,
+        description=(
+            "True if the paper's main subject is AI/ML: models, training, inference, agents, "
+            "evaluation, data for ML, or ML applied to a domain. False for pure math, "
+            "algorithms/complexity, physics, biology, etc. with no ML focus."
+        ),
+    )
 
 
 class _BatchRanking(BaseModel):
@@ -119,6 +127,8 @@ def _build_ranking_chain():
                 "   6 = solid work with clear improvements\n"
                 "   4 = incremental, narrow, or heavily engineering-driven\n"
                 "   2 = derivative, low novelty, weak evaluation\n"
+                "Also set is_ai_ml: this digest is for an AI/ML audience, so mark papers whose "
+                "main subject is not AI/ML (pure math, complexity theory, physics...) false.\n"
                 "Score ALL papers provided — omitting any paper is an error.",
             ),
             ("user", "{papers}"),
@@ -144,6 +154,19 @@ def _llm_quality_scores(candidates: list[dict]) -> dict[str, dict]:
         except Exception as e:
             logger.warning("ranking_batch_failed", batch_start=i, error=str(e))
     return scores
+
+
+def _drop_off_topic(candidates: list[dict], llm_scores: dict[str, dict]) -> list[dict]:
+    """Remove papers the ranker flagged as not AI/ML. User-queued (manual) papers and
+    papers without a score (failed batch) are kept: the filter fails open."""
+    kept = [
+        a for a in candidates
+        if a.get("source") == "manual" or llm_scores.get(a["url"], {}).get("is_ai_ml", True)
+    ]
+    dropped = [a["title"][:80] for a in candidates if a not in kept]
+    if dropped:
+        logger.info("off_topic_papers_dropped", count=len(dropped), titles=dropped)
+    return kept
 
 
 def _score_entry(article: dict, llm_scores: dict | None) -> dict:
@@ -182,6 +205,7 @@ def rank_papers_node(state: PipelineState) -> dict:
     )
 
     llm_scores = _llm_quality_scores(to_rank)
+    to_rank = _drop_off_topic(to_rank, llm_scores)
     rankings = sorted(
         (_score_entry(a, llm_scores.get(a["url"])) for a in to_rank),
         # Manual (user-curated) papers always win regardless of boosts; then composite.

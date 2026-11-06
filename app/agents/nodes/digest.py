@@ -37,6 +37,9 @@ def build_digest_entry_node(state: "PipelineState") -> dict:
     analysis = state.get("deep_analysis", {})
     if not paper or not analysis:
         return {"digest_html": "", "current_step": "digest_skipped"}
+    if state.get("relevance_is_ai_ml", True) is False:
+        logger.info("digest_skipped_off_topic", title=paper.get("title", "")[:80])
+        return {"digest_html": "", "current_step": "digest_skipped_off_topic"}
 
     try:
         llm = ChatGoogleGenerativeAI(

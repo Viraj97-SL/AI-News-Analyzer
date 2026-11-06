@@ -43,6 +43,14 @@ class PaperRelevance(BaseModel):
         description="Overclaiming, no code/data released, marketing language — HIGHER is worse.",
     )
     reasoning: str = Field(description="One sentence justifying the scores.")
+    is_ai_ml: bool = Field(
+        default=True,
+        description=(
+            "True if the paper's main subject is AI/ML: models, training, inference, agents, "
+            "evaluation, data for ML, or ML applied to a domain. False for pure math, "
+            "algorithms/complexity, physics, biology, etc. with no ML focus."
+        ),
+    )
 
     @property
     def score(self) -> float:
@@ -79,7 +87,8 @@ def relevance_gate_node(state: "PipelineState") -> dict:
              "actionable, are NOT highly novel, and DO overclaim relative to their evidence.\n"
              "practitioner_actionability: could an engineer apply this in the next 6 months?\n"
              "claim_verifiability: are there real reported numbers, or vague/abstract-only claims?\n"
-             "hype_penalty (0-10, HIGHER is worse): overclaiming, no code/data released, marketing language."),
+             "hype_penalty (0-10, HIGHER is worse): overclaiming, no code/data released, marketing language.\n"
+             "is_ai_ml: false if the paper's main subject is not AI/ML (e.g. pure math)."),
             ("user",
              "Title: {title}\n\nCore Problem: {core_problem}\n\nMethodology: {methodology}\n\n"
              "Breakthroughs: {breakthroughs}\n\nQuantitative Results:\n{results}"),
@@ -111,7 +120,8 @@ def relevance_gate_node(state: "PipelineState") -> dict:
     # The deep-analysis model (strongest tier, full paper) outranks this fast-tier,
     # deliberately critical score: a paper it calls Major/Paradigm is never demoted.
     verdict_override = not score_passed and verdict in VERDICTS_BYPASSING_GATE
-    passed = score_passed or verdict_override
+    # An off-topic paper never passes, whatever its score or verdict.
+    passed = relevance.is_ai_ml and (score_passed or verdict_override)
     logger.info(
         "paper_relevance_scored",
         title=paper.get("title", "")[:80],
@@ -120,6 +130,7 @@ def relevance_gate_node(state: "PipelineState") -> dict:
         passed=passed,
         verdict=verdict,
         verdict_override=verdict_override,
+        is_ai_ml=relevance.is_ai_ml,
         actionability=relevance.practitioner_actionability,
         audience_fit=relevance.audience_fit,
         claim_verifiability=relevance.claim_verifiability,
@@ -130,5 +141,6 @@ def relevance_gate_node(state: "PipelineState") -> dict:
         "relevance_score": round(relevance.score, 2),
         "relevance_passed": passed,
         "relevance_reasoning": relevance.reasoning,
+        "relevance_is_ai_ml": relevance.is_ai_ml,
         "current_step": "relevance_verdict_override" if verdict_override else "relevance_scored",
     }
