@@ -85,6 +85,38 @@ class TestRelevanceGateNode:
 
         assert result["relevance_passed"] is False
 
+    def _run_with_low_score(self, monkeypatch, verdict: str | None) -> dict:
+        from app.agents.nodes import relevance as relevance_module
+
+        monkeypatch.setattr(relevance_module.settings, "relevance_score_threshold", 5.5)
+        # Dory1.0-4B's real scores on 2026-11-06: 5.25, just under the 5.5 threshold.
+        relevance = PaperRelevance(
+            practitioner_actionability=4, audience_fit=8, claim_verifiability=7, novelty=7,
+            hype_penalty=5, reasoning="Not immediately actionable.",
+        )
+        analysis = {**_base_state()["deep_analysis"]}
+        if verdict is not None:
+            analysis["significance_verdict"] = verdict
+        with patch("app.agents.nodes.relevance.ChatGoogleGenerativeAI") as MockLLM:
+            mock_instance = MagicMock()
+            mock_instance.with_structured_output.return_value = _mock_llm_instance(relevance)
+            MockLLM.return_value = mock_instance
+            return relevance_gate_node(_base_state(deep_analysis=analysis))
+
+    def test_major_contribution_verdict_overrides_low_score(self, monkeypatch):
+        result = self._run_with_low_score(monkeypatch, "Major Contribution")
+
+        assert result["relevance_passed"] is True
+        assert result["relevance_score"] == 5.25
+        assert result["current_step"] == "relevance_verdict_override"
+
+    def test_paradigm_shift_verdict_overrides_low_score(self, monkeypatch):
+        assert self._run_with_low_score(monkeypatch, "Paradigm Shift")["relevance_passed"] is True
+
+    def test_lower_verdicts_still_gated(self, monkeypatch):
+        for verdict in ("Solid Contribution", "Incremental", None):
+            assert self._run_with_low_score(monkeypatch, verdict)["relevance_passed"] is False
+
     def test_retries_once_after_transient_failure_then_succeeds(self, monkeypatch):
         """A schema/validation failure on the first attempt should retry rather than
         immediately falling back to the fail-open default."""

@@ -50,7 +50,31 @@ _SECTION_HEADING_PATTERNS: dict[str, re.Pattern[str]] = {
 # section so it doesn't run past the start of the following one.
 _NEXT_HEADING_RE = re.compile(r"(?m)^\s*(?:\d+(?:\.\d+)*\.?\s+)[A-Z][A-Za-z0-9 ,\-:]{2,60}\s*$")
 
+# Start of the bibliography — everything from here on is citations, not content.
+_REFERENCES_HEADING_RE = re.compile(
+    r"(?im)^\s*(?:\d+\.?\s+)?(references|bibliography)\s*$"
+)
+# A "References" line in the first part of the text is a table of contents entry,
+# not the bibliography.
+_REFERENCES_MIN_POSITION_RATIO = 0.2
+
 _EMPTY_RESULT = {"full_text_available": False, "analysis_confidence": "low", "paper_sections": {}}
+
+
+def _extract_body(raw_text: str, max_chars: int) -> str:
+    """The paper's main text (before the bibliography), capped at max_chars.
+
+    Heading-based section extraction misses papers whose sections aren't named
+    Results/Ablation/Setup (e.g. "Architecture", "Pretraining"), which left the
+    analysis with only the abstract. The body gives the model the method too.
+    """
+    min_pos = int(len(raw_text) * _REFERENCES_MIN_POSITION_RATIO)
+    end = len(raw_text)
+    for match in _REFERENCES_HEADING_RE.finditer(raw_text):
+        if match.start() >= min_pos:
+            end = match.start()
+            break
+    return raw_text[:end].strip()[:max_chars]
 
 
 def _extract_section(raw_text: str, pattern: re.Pattern[str], max_chars: int) -> str:
@@ -91,6 +115,10 @@ def fetch_full_text_node(state: "PipelineState") -> dict:
         for name, pattern in _SECTION_HEADING_PATTERNS.items()
     }
     sections = {name: text for name, text in sections.items() if text}
+
+    body = _extract_body(raw_text, settings.full_text_body_max_chars)
+    if len(body) >= settings.full_text_min_body_chars:
+        sections = {**sections, "body": body}
 
     if not sections:
         logger.info("full_text_no_target_sections_found", arxiv_id=arxiv_id)

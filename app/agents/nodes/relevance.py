@@ -55,6 +55,9 @@ class PaperRelevance(BaseModel):
         ) / 4.0
 
 
+VERDICTS_BYPASSING_GATE: frozenset[str] = frozenset({"Major Contribution", "Paradigm Shift"})
+
+
 def relevance_gate_node(state: "PipelineState") -> dict:
     """Score the chosen paper's relevance; gate the full deep-dive pipeline on the result."""
     paper = state.get("chosen_research_paper", {})
@@ -103,13 +106,20 @@ def relevance_gate_node(state: "PipelineState") -> dict:
             "current_step": "relevance_scoring_failed_default_pass",
         }
 
-    passed = relevance.score >= settings.relevance_score_threshold
+    score_passed = relevance.score >= settings.relevance_score_threshold
+    verdict = analysis.get("significance_verdict", "")
+    # The deep-analysis model (strongest tier, full paper) outranks this fast-tier,
+    # deliberately critical score: a paper it calls Major/Paradigm is never demoted.
+    verdict_override = not score_passed and verdict in VERDICTS_BYPASSING_GATE
+    passed = score_passed or verdict_override
     logger.info(
         "paper_relevance_scored",
         title=paper.get("title", "")[:80],
         score=round(relevance.score, 2),
         threshold=settings.relevance_score_threshold,
         passed=passed,
+        verdict=verdict,
+        verdict_override=verdict_override,
         actionability=relevance.practitioner_actionability,
         audience_fit=relevance.audience_fit,
         claim_verifiability=relevance.claim_verifiability,
@@ -120,5 +130,5 @@ def relevance_gate_node(state: "PipelineState") -> dict:
         "relevance_score": round(relevance.score, 2),
         "relevance_passed": passed,
         "relevance_reasoning": relevance.reasoning,
-        "current_step": "relevance_scored",
+        "current_step": "relevance_verdict_override" if verdict_override else "relevance_scored",
     }

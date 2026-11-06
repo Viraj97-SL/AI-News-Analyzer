@@ -1,6 +1,6 @@
 {
   "_instructions": "Add ArXiv papers to 'queue' to feature them in the next research pipeline run. They are processed one at a time (oldest first) and moved to 'archive' automatically. Accepts full ArXiv URLs (https://arxiv.org/abs/XXXX) or bare IDs (XXXX.XXXXX). Auto-rotation: when queue is empty, the pipeline randomly (~33% of runs) injects a landmark paper from 'archive' as a Classic Paper Series post. recently_featured tracks last 12 featured URLs to avoid repetition.",
-  "queue": [],
+  "queue": ["https://arxiv.org/abs/2611.03998"],
   "recently_featured": [],
   "archive": [
     {"url": "https://arxiv.org/abs/1706.03762", "note": "Attention Is All You Need — the Transformer architecture that started everything (Vaswani et al., Google, 2017)"},
